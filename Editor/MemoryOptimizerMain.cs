@@ -34,7 +34,7 @@ namespace JeTeeS.MemoryOptimizer
             public List<AnimatorState> states = new List<AnimatorState>();
         }
 
-        private const string discordLink = "https://discord.gg/N7snuJhzkd";
+        private const string discordLink = "https://discord.gg/N7snuJhzkdN7snuJhzkd";
         private const string prefix = "MemOpt_";
         private const string syncingLayerName = prefix + "Syncing Layer";
         private const string syncingLayerIdentifier = prefix + "Syncer";
@@ -589,8 +589,20 @@ namespace JeTeeS.MemoryOptimizer
 
             AnimatorStateTransition localTransition = localRemoteSplitState.AddTransition(localStateMachine);
             AnimatorStateTransition remoteTransition = localRemoteSplitState.AddTransition(remoteStateMachine);
-            localTransition.AddCondition(AnimatorConditionMode.If, 0, "IsLocal");
-            remoteTransition.AddCondition(AnimatorConditionMode.IfNot, 0, "IsLocal");
+
+            // in some rare cases some types of FaceTracking (or other OSC based components) use a float-based IsLocal parameter
+            // this will prevent the layer from working correctly as the transition binding no longer matches the type
+            if (optimizerState.FXController.parameters.Any(p => p.name.Equals("IsLocal") && p.type == AnimatorControllerParameterType.Float))
+            {
+                localTransition.AddCondition(AnimatorConditionMode.Greater, 0.5f, "IsLocal");
+                remoteTransition.AddCondition(AnimatorConditionMode.Less, 0.5f, "IsLocal");
+            }
+            else
+            {
+                localTransition.AddCondition(AnimatorConditionMode.If, 0, "IsLocal");
+                remoteTransition.AddCondition(AnimatorConditionMode.IfNot, 0, "IsLocal");
+            }
+            
             optimizerState.localStateMachine = localStateMachine;
             optimizerState.remoteStateMachine = remoteStateMachine;
         }

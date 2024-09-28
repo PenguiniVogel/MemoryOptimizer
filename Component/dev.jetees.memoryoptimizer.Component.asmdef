@@ -1,22 +1,25 @@
-{
-  "name": "dev.jetees.memoryoptimizer.Editor",
+﻿{
+  "name": "dev.jetees.memoryoptimizer.Component",
   "references": [
     "VRC.SDK3A",
     "VRC.SDK3A.Editor",
     "VRC.SDKBase",
     "VRC.SDKBase.Editor",
-    "dev.jetees.memoryoptimizer",
-    "dev.jetees.memoryoptimizer.Component",
     "dev.jetees.memoryoptimizer.Helper"
   ],
-  "includePlatforms": [
-      "Editor"
-  ],
+  "includePlatforms": [],
   "excludePlatforms": [],
   "allowUnsafeCode": false,
   "autoReferenced": true,
   "overrideReferences": false,
   "precompiledReferences": [],
   "defineConstraints": [],
-  "optionalUnityReferences": []
+  "optionalUnityReferences": [],
+  "versionDefines": [
+    {
+      "define": "VRCFury_Installed",
+      "expression": "0.0.0",
+      "name": "com.vrcfury.vrcfury"
+    }
+  ]
 }

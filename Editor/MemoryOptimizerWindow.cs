@@ -492,6 +492,7 @@ namespace JeTeeS.MemoryOptimizer
                 newParamCost = expressionParameters == null ? 0 : expressionParameters.CalcTotalCost();
                 return;
             }
+            
             if (syncSteps < 2)
                 syncSteps = 2;
 
