@@ -34,7 +34,7 @@ namespace JeTeeS.MemoryOptimizer
             public List<AnimatorState> states = new List<AnimatorState>();
         }
 
-        private const string discordLink = "https://discord.gg/N7snuJhzkdN7snuJhzkd";
+        private const string discordLink = "https://discord.gg/N7snuJhzkd";
         private const string prefix = "MemOpt_";
         private const string syncingLayerName = prefix + "Syncing Layer";
         private const string syncingLayerIdentifier = prefix + "Syncer";

@@ -12,7 +12,7 @@ using VRC.SDK3.Avatars.ScriptableObjects;
 namespace VF.Service {
     /**
      * Many of these checks are copied from or modified from the validation checks in the VRCSDK
-     * MemoryOptimizerPatched
+     * patched by >>> dev.jetees.memoryoptimier.MemoryOptimizerVRCFuryPatcher
      */
     [VFService]
     internal class FinalValidationService {

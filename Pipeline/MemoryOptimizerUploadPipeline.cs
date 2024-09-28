@@ -15,6 +15,23 @@ namespace JeTeeS.MemoryOptimizer
     public class MemoryOptimizerUploadPipeline : IVRCSDKPreprocessAvatarCallback
     {
         private readonly string[] _paramTypes = { "Int", "Float", "Bool" };
+        private readonly string[] _animatorParamTypes =
+        {
+            "",
+            // 1
+            "Float",
+            "",
+            // 3
+            "Int",
+            // 4
+            "Bool",
+            "",
+            "",
+            "",
+            "",
+            // 9
+            "Trigger"
+        };
         
         // VRCFury runs at -10000
         // VRChat strips components at -1024
@@ -77,6 +94,26 @@ namespace JeTeeS.MemoryOptimizer
                     continue;
                 }
 
+                var fxLayer = FindFXLayer(_vrcAvatarDescriptor);
+                // add the parameter to the fx layer if it's missing
+                if (fxLayer.parameters.All(p => !p.name.Equals(parameter.name)))
+                {
+                    var type = AnimatorControllerParameterType.Float;
+                    switch (parameter.valueType)
+                    {
+                        case VRCExpressionParameters.ValueType.Int:
+                            type = AnimatorControllerParameterType.Int;
+                            break;
+                        case VRCExpressionParameters.ValueType.Float:
+                            break;
+                        case VRCExpressionParameters.ValueType.Bool:
+                            type = AnimatorControllerParameterType.Bool;
+                            break;
+                    }
+                    
+                    fxLayer.AddUniqueParam(parameter.name, type);
+                }
+                
                 if (savedParameterConfiguration.attemptToOptimize && savedParameterConfiguration.willOptimize)
                 {
                     Debug.Log($"MemoryOptimizerUploadPipeline.OnPreprocessAvatar {savedParameterConfiguration.parameterName} will be optimized.");

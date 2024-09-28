@@ -73,6 +73,7 @@ namespace JeTeeS.MemoryOptimizer
             {
                 if (!savedParameterConfigurations.Contains(savedParameterConfiguration))
                 {
+                    totalParameterCost += savedParameterConfiguration.parameterType.Equals("Bool") ? 1 : 8;
                     savedParameterConfigurations.Add(savedParameterConfiguration);
                 }
             }
@@ -150,6 +151,7 @@ namespace JeTeeS.MemoryOptimizer
                         // that is being targeted, we skip this as we cannot correctly map it back
                         if (toggleName.Equals("VF##_") && !useGlobalParameter)
                         {
+                            totalParameterCost += isSlider ? 8 : 1;
                             continue;
                         }
 
@@ -241,8 +243,7 @@ namespace JeTeeS.MemoryOptimizer
 
         internal void Refresh()
         {
-            totalParameterCost = 0;
-            optimizedParameterCost = 0;
+            optimizedParameterCost = totalParameterCost;
             
             var parametersBool = new List<SavedParameterConfiguration>(savedParameterConfigurations.Count);
             var parametersIntNFloat = new List<SavedParameterConfiguration>(savedParameterConfigurations.Count);
@@ -280,14 +281,8 @@ namespace JeTeeS.MemoryOptimizer
                 savedParameterConfiguration.willOptimize = true;
             }
 
-            foreach (var savedParameterConfiguration in savedParameterConfigurations)
-            {
-                totalParameterCost += savedParameterConfiguration.parameterType.Equals("Bool") ? 1 : 8;
-                if (!savedParameterConfiguration.willOptimize)
-                {
-                    optimizedParameterCost += savedParameterConfiguration.parameterType.Equals("Bool") ? 1 : 8;
-                }
-            }
+            optimizedParameterCost -= parametersBoolToOptimize.Count;
+            optimizedParameterCost -= parametersIntNFloatToOptimize.Count * 8;
             
             var installationIndexers = (syncSteps - 1).DecimalToBinary().ToString().Count();
             var installationBoolSyncers = parametersBoolToOptimize.Count / syncSteps;
