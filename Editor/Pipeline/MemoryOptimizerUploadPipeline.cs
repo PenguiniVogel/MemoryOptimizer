@@ -41,6 +41,12 @@ namespace JeTeeS.MemoryOptimizer.Pipeline
             var vrcAvatarDescriptor = avatarGameObject.GetComponent<VRCAvatarDescriptor>();
             var memoryOptimizer = avatarGameObject.GetComponent<MemoryOptimizerComponent>();
 
+            // if we don't have a component don't process
+            if (memoryOptimizer is null)
+            {
+                return true;
+            }
+            
             var parameters = vrcAvatarDescriptor.expressionParameters?.parameters ?? Array.Empty<VRCExpressionParameters.Parameter>();
 
             Debug.Log($"<color=yellow>[MemoryOptimizer]</color> OnPreprocessAvatar running on {avatarGameObject.name} with {parameters.Length} parameters - loaded configuration: {memoryOptimizer.savedParameterConfigurations.Where(p => p.selected && p.willBeOptimized).ToList().Count}");
