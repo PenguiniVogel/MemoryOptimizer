@@ -2,7 +2,7 @@
 using UnityEditor;
 using UnityEngine;
 
-namespace JeTeeS.MemoryOptimizer
+namespace JeTeeS.MemoryOptimizer.Helper
 {
     internal static class ReadOnlyPropertyHelper
     {

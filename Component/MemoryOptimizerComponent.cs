@@ -1,11 +1,13 @@
-﻿#if UNITY_EDITOR
-
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using JeTeeS.MemoryOptimizer.Helper;
+using JeTeeS.MemoryOptimizer.Shared;
 using JeTeeS.TES.HelperFunctions;
+using UnityEditor;
 using UnityEngine;
+using UnityEngine.Serialization;
 using VRC.SDK3.Avatars.Components;
 using VRC.SDK3.Avatars.ScriptableObjects;
 using VRC.SDKBase;
@@ -13,18 +15,33 @@ using VRC.SDKBase;
 namespace JeTeeS.MemoryOptimizer
 {
     [Serializable]
+    [DisallowMultipleComponent]
     [RequireComponent(typeof(VRCAvatarDescriptor))]
-    public class MemoryOptimizerComponent : MonoBehaviour, IEditorOnly
+    internal class MemoryOptimizerComponent : MonoBehaviour, IEditorOnly
     {
         [Serializable]
-        public class SavedParameterConfiguration
+        internal class SavedParameterConfiguration : MemoryOptimizerListData
         {
-            public string parameterName = string.Empty;
-            [ReadOnlyPropertyHelper.ReadOnly] public string parameterType = string.Empty;
-            public bool attemptToOptimize = true;
-            [ReadOnlyPropertyHelper.ReadOnly] public bool willOptimize = false;
-            [ReadOnlyPropertyHelper.ReadOnly] public bool isVRCFuryParameter = false;
-            [ReadOnlyPropertyHelper.ReadOnly] public string info = string.Empty;
+            public bool isVRCFuryParameter = false;
+            public string info = string.Empty;
+
+            public SavedParameterConfiguration(VRCExpressionParameters.Parameter parameter) : base(parameter, false, false)
+            {
+            }
+            
+            public SavedParameterConfiguration(string parameterName, VRCExpressionParameters.ValueType parameterType) : base(new VRCExpressionParameters.Parameter()
+            {
+                name = parameterName,
+                valueType = parameterType,
+                networkSynced = true
+            }, false, false)
+            {
+            }
+
+            public override int GetHashCode()
+            {
+                return $"{this.param.name}{TESHelperFunctions._paramTypes[(int)this.param.valueType]}".GetHashCode();
+            }
 
             public override bool Equals(object obj)
             {
@@ -35,61 +52,73 @@ namespace JeTeeS.MemoryOptimizer
 
                 if (obj is SavedParameterConfiguration typed)
                 {
-                    return typed.parameterName.Equals(parameterName) && typed.parameterType.Equals(parameterType);
+                    return typed.param.name.Equals(this.param.name) && typed.param.valueType == this.param.valueType;
                 }
                 
                 return base.Equals(obj);
             }
 
-            public override string ToString()
+            public MemoryOptimizerListData Pure()
             {
-                return $"{parameterName} ({parameterType}) - {(attemptToOptimize ? "Will try to Optimize" : "Won't Optimize")}";
+                return new MemoryOptimizerListData(new VRCExpressionParameters.Parameter()
+                {
+                    name = this.param.name,
+                    valueType = this.param.valueType,
+                    networkSynced = true
+                }, this.selected, this.willBeOptimized);
             }
-        } 
+            
+            public static bool operator ==(SavedParameterConfiguration a, object b)
+            {
+                return a?.Equals(b) ?? false;
+            }
+
+            public static bool operator !=(SavedParameterConfiguration a, object b)
+            {
+                return !(a == b);
+            }
+        }
         
-        [NonSerialized] private readonly string[] _paramTypes = { "Int", "Float", "Bool" };
         [NonSerialized] private VRCAvatarDescriptor _vrcAvatarDescriptor;
 
         public bool changeDetection = false;
         public int syncSteps = 2;
-        public List<SavedParameterConfiguration> savedParameterConfigurations = new List<SavedParameterConfiguration>(0);
-        public List<string> exclusions = new List<string>(0);
-        public int totalParameterCost = 0;
-        public int optimizedParameterCost = 0;
+        public float stepDelay = 0.2f;
+        public int wdOption = 0;
+        [SerializeReference] internal DefaultAsset savePathOverride = null;
+        
+        [NonSerialized] internal int longestParameterName = 0;
+
+        [SerializeField] internal List<SavedParameterConfiguration> savedParameterConfigurations = new(0);
         
         internal void Load()
         {
             // get descriptor
             _vrcAvatarDescriptor = gameObject.GetComponent<VRCAvatarDescriptor>();
+            var descriptorParameters = (_vrcAvatarDescriptor?.expressionParameters?.parameters ?? Array.Empty<VRCExpressionParameters.Parameter>()).Where(p => p.networkSynced).ToList();
             
             // collect all descriptor parameters that are synced
-            foreach (var savedParameterConfiguration in (_vrcAvatarDescriptor?.expressionParameters?.parameters ?? Array.Empty<VRCExpressionParameters.Parameter>()).Where(p => p.networkSynced).Select(p => new SavedParameterConfiguration()
+            foreach (var savedParameterConfiguration in descriptorParameters.Select(p => new SavedParameterConfiguration(p)
                      {
-                         parameterName = p.name,
-                         parameterType = _paramTypes[(int)p.valueType],
-                         attemptToOptimize = true,
                          info = "From Avatar Descriptor"
                      }))
             {
-                if (!savedParameterConfigurations.Contains(savedParameterConfiguration))
-                {
-                    totalParameterCost += savedParameterConfiguration.parameterType.Equals("Bool") ? 1 : 8;
-                    savedParameterConfigurations.Add(savedParameterConfiguration);
-                }
+                AddOrReplaceParameterConfiguration(savedParameterConfiguration);
             }
             
-#if VRCFury_Installed
+#if MemoryOptimizer_VRCFury_IsInstalled
             // since all VRCFury components are IEditorOnly, we can find them like this
             // there is no better way as VRCFury has decided to mark their classes as internal only
-            IEnumerable<IEditorOnly> _vrcfComponents = (gameObject.GetComponents<IEditorOnly>())
+            List<IEditorOnly> vrcfComponents = (gameObject.GetComponents<IEditorOnly>())
                 .Concat(gameObject.GetComponentsInChildren<IEditorOnly>(true))
-                .Where(x => x.GetType().ToString().Contains("VRCFury"));
+                .Where(x => x.GetType().ToString().Contains("VRCFury"))
+                .ToList();
             
             // collect all VRCFury parameters
             // this is where the real fun begins...
-            if (_vrcfComponents.Any())
+            if (vrcfComponents.Any())
             {
-                foreach (IEditorOnly vrcfComponent in _vrcfComponents)
+                foreach (IEditorOnly vrcfComponent in vrcfComponents)
                 {
                     // some systems use EditorOnly components to be optimized away
                     var vrcfGameObject = ((Component)vrcfComponent).gameObject;
@@ -146,28 +175,21 @@ namespace JeTeeS.MemoryOptimizer
                         {
                             useGlobalParameter = false;
                         }
-
+                        
                         // if the toggle is a non described empty one and there isn't a global parameter
                         // that is being targeted, we skip this as we cannot correctly map it back
                         if (toggleName.Equals("VF##_") && !useGlobalParameter)
                         {
-                            totalParameterCost += isSlider ? 8 : 1;
                             continue;
                         }
 
-                        SavedParameterConfiguration savedParameterConfiguration = new SavedParameterConfiguration()
+                        SavedParameterConfiguration savedParameterConfiguration = new SavedParameterConfiguration(useGlobalParameter ? globalParameter : $"VF##_{toggleName}", isSlider ? VRCExpressionParameters.ValueType.Float : VRCExpressionParameters.ValueType.Bool)
                         {
-                            parameterName = useGlobalParameter ? globalParameter : $"VF##_{toggleName}",
-                            parameterType = isSlider ? "Float" : "Bool",
-                            attemptToOptimize = true,
                             isVRCFuryParameter = true,
                             info = isEditorOnly ? "(EditorOnly) " : string.Empty + $"From Toggle: {toggleName} on {gameObject.name}"
                         };
                         
-                        if (!savedParameterConfigurations.Contains(savedParameterConfiguration))
-                        {
-                            savedParameterConfigurations.Add(savedParameterConfiguration);
-                        }
+                        AddOrReplaceParameterConfiguration(savedParameterConfiguration);
                     }
                     // Full Controller
                     else if (contentType.Contains("FullController"))
@@ -212,19 +234,13 @@ namespace JeTeeS.MemoryOptimizer
                                         continue;
                                     }
                                     
-                                    SavedParameterConfiguration savedParameterConfiguration = new SavedParameterConfiguration()
+                                    SavedParameterConfiguration savedParameterConfiguration = new SavedParameterConfiguration((containsStar && !globalParameters.Contains($"!{parameter.name}")) || globalParameters.Contains(parameter.name) ? parameter.name : $"VF##_{parameter.name}", parameter.valueType)
                                     {
-                                        parameterName = (containsStar && !globalParameters.Contains($"!{parameter.name}")) || globalParameters.Contains(parameter.name) ? parameter.name : $"VF##_{parameter.name}",
-                                        parameterType = _paramTypes[(int)parameter.valueType],
-                                        attemptToOptimize = true,
                                         isVRCFuryParameter = true,
                                         info = isEditorOnly ? "(EditorOnly) " : string.Empty + $"From FullController on {vrcfGameObject.name}"
                                     };
                                     
-                                    if (!savedParameterConfigurations.Contains(savedParameterConfiguration))
-                                    {
-                                        savedParameterConfigurations.Add(savedParameterConfiguration);
-                                    }
+                                    AddOrReplaceParameterConfiguration(savedParameterConfiguration);
                                 }
                             }
                         }
@@ -234,63 +250,34 @@ namespace JeTeeS.MemoryOptimizer
 #endif
         }
 
-        internal void Reset()
+        private void Awake()
         {
-            savedParameterConfigurations = new List<SavedParameterConfiguration>(0);
             Load();
-            Refresh();
         }
 
-        internal void Refresh()
+        private void Reset()
         {
-            optimizedParameterCost = totalParameterCost;
-            
-            var parametersBool = new List<SavedParameterConfiguration>(savedParameterConfigurations.Count);
-            var parametersIntNFloat = new List<SavedParameterConfiguration>(savedParameterConfigurations.Count);
-            
-            foreach (var savedParameterConfiguration in savedParameterConfigurations)
+            savedParameterConfigurations = new(0);
+        }
+        
+        private void AddOrReplaceParameterConfiguration(SavedParameterConfiguration configuration)
+        {
+            if (savedParameterConfigurations.Contains(configuration))
             {
-                savedParameterConfiguration.attemptToOptimize = exclusions.All(e => !savedParameterConfiguration.parameterName.Replace("VF##_", string.Empty).StartsWith(e));
-                savedParameterConfiguration.willOptimize = false;
-
-                if (savedParameterConfiguration.attemptToOptimize)
+                // in the odd case a parameter is defined multiple times
+                // we replace it with the one costing more, as mapping from a float to a bool
+                // usually is handled much better than bool to a float
+                var saved = savedParameterConfigurations.FirstOrDefault(p => p == configuration);
+                if (saved is not null && saved.param.GetParameterCost() < configuration.param.GetParameterCost())
                 {
-                    switch (savedParameterConfiguration.parameterType)
-                    {
-                        case "Bool":
-                            parametersBool.Add(savedParameterConfiguration);
-                            break;
-                        case "Int":
-                        case "Float":
-                            parametersIntNFloat.Add(savedParameterConfiguration);
-                            break;
-                    }
+                    saved.param = configuration.param;
                 }
             }
-            
-            var parametersBoolToOptimize = parametersBool.Take(parametersBool.Count - (parametersBool.Count % syncSteps)).ToList();
-            var parametersIntNFloatToOptimize = parametersIntNFloat.Take(parametersIntNFloat.Count - (parametersIntNFloat.Count % syncSteps)).ToList();
-
-            foreach (var savedParameterConfiguration in parametersBoolToOptimize)
+            else
             {
-                savedParameterConfiguration.willOptimize = true;
+                longestParameterName = Math.Max(longestParameterName, configuration.param.name.Count());
+                savedParameterConfigurations.Add(configuration);
             }
-
-            foreach (var savedParameterConfiguration in parametersIntNFloatToOptimize)
-            {
-                savedParameterConfiguration.willOptimize = true;
-            }
-
-            optimizedParameterCost -= parametersBoolToOptimize.Count;
-            optimizedParameterCost -= parametersIntNFloatToOptimize.Count * 8;
-            
-            var installationIndexers = (syncSteps - 1).DecimalToBinary().ToString().Count();
-            var installationBoolSyncers = parametersBoolToOptimize.Count / syncSteps;
-            var installationIntNFloatSyncers = parametersIntNFloatToOptimize.Count / syncSteps;
-
-            optimizedParameterCost += installationIndexers + installationBoolSyncers + (installationIntNFloatSyncers * 8);
         }
     }
 }
-
-#endif

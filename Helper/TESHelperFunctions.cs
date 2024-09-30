@@ -11,12 +11,15 @@ using VRC.SDK3.Avatars.ScriptableObjects;
 
 namespace JeTeeS.TES.HelperFunctions
 {
-    public static class TESHelperFunctions
+    internal static class TESHelperFunctions
     {
+        internal static readonly string[] _paramTypes = { "Int", "Float", "Bool" };
+        
         public static string SanitizeFileName(this string fileName)
         {
             return String.Join("_", fileName.Split(System.IO.Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries));
         }
+        
         public static void MakeBackupOf(List<UnityEngine.Object> things, string saveTo)
         {
             ReadyPath(saveTo);
@@ -26,32 +29,49 @@ namespace JeTeeS.TES.HelperFunctions
                 List<string> splitAssetname = GetAssetName(obj).Split('.').ToList();
                 string assetName = "";
                 foreach (string strng in splitAssetname.Take(splitAssetname.Count - 1))
+                {
                     assetName += strng;
+                }
 
                 while (System.IO.File.Exists(saveTo + assetName + $" ({i})." + splitAssetname.Last()))
+                {
                     i++;
+                }
+                
                 if (!AssetDatabase.CopyAsset(AssetDatabase.GetAssetPath(obj), saveTo + assetName + $" ({i})." + splitAssetname.Last()))
+                {
                     Debug.LogWarning($"Failed to copy '{AssetDatabase.GetAssetPath(obj)}' to path: {saveTo + assetName + $" ({i})." + splitAssetname.Last()}");
+                }
             }
         }
+        
         public static string GetFileType(UnityEngine.Object obj)
         {
             string fileName = GetAssetName(obj);
             if (!string.IsNullOrEmpty(fileName))
+            {
                 return fileName.Split('.').ToList().Last();
+            }
+            
             return null;
         }
+        
         public static string GetAssetName(string path)
         {
             if (!string.IsNullOrEmpty(path))
+            {
                 return path.Split(@"\/".ToCharArray()).ToList().Last();
+            }
+            
             return null;
         }
+        
         public static string GetAssetName(UnityEngine.Object thing)
         {
             string path = AssetDatabase.GetAssetPath(thing);
             return GetAssetName(path);
         }
+        
         public static int UninstallErrorDialogWithDiscordLink(string title, string mainMessage, string discordLink)
         {
             int option = EditorUtility.DisplayDialogComplex(title, mainMessage, "Continue uninstall anyways (not recommended)", "Cancel uninstall", "Join the discord");
@@ -69,6 +89,7 @@ namespace JeTeeS.TES.HelperFunctions
                         return -1;
                 }
         }
+        
         public static AnimatorController FindFXLayer(VRCAvatarDescriptor descriptor)
         {
             return (AnimatorController)descriptor.baseAnimationLayers.FirstOrDefault(x => x.type == VRCAvatarDescriptor.AnimLayerType.FX && x.animatorController != null).animatorController;
@@ -76,8 +97,11 @@ namespace JeTeeS.TES.HelperFunctions
 
         public static VRCExpressionParameters FindExpressionParams(VRCAvatarDescriptor descriptor)
         {
-            if (descriptor == null)
+            if (descriptor is null)
+            {
                 return null;
+            }
+            
             return descriptor.expressionParameters;
         }
 
@@ -111,7 +135,10 @@ namespace JeTeeS.TES.HelperFunctions
             subPaths.RemoveAt(subPaths.Count - 1);
             string returnString = "";
             foreach (string subPath in subPaths)
+            {
                 returnString += subPath + "/";
+            }
+            
             return returnString;
         }
 
@@ -133,8 +160,12 @@ namespace JeTeeS.TES.HelperFunctions
         public static int FindLayerIndex(this AnimatorController controller, AnimatorControllerLayer layer)
         {
             for (int i = 0; i < controller.layers.Count(); i++)
+            {
                 if (controller.layers[i].stateMachine == layer.stateMachine)
+                {
                     return i;
+                }
+            }
 
             return -1;
         }
@@ -161,9 +192,14 @@ namespace JeTeeS.TES.HelperFunctions
             {
                 AnimatorStateMachine currentStateMachine = stateMachines.Dequeue();
                 foreach (ChildAnimatorState state in currentStateMachine.states)
+                {
                     returnList.Add(state);
+                }
+                
                 foreach (ChildAnimatorStateMachine stateMachine in currentStateMachine.stateMachines)
+                {
                     stateMachines.Enqueue(stateMachine.stateMachine);
+                }
             }
 
             return returnList;
@@ -173,10 +209,15 @@ namespace JeTeeS.TES.HelperFunctions
         {
             Queue<ChildAnimatorState> stateQueue = new Queue<ChildAnimatorState>();
             foreach (var state in layer.FindAllStatesInLayer())
+            {
                 stateQueue.Enqueue(state);
+            }
 
             if (stateQueue.Count == 0)
+            {
                 return -2;
+            }
+            
             ChildAnimatorState currentState = stateQueue.Dequeue();
             bool firstWD = currentState.state.writeDefaultValues;
             while (stateQueue.Count > 1)
@@ -184,7 +225,9 @@ namespace JeTeeS.TES.HelperFunctions
                 currentState = stateQueue.Dequeue();
 
                 if (currentState.state.writeDefaultValues != firstWD && !currentState.state.name.Contains("WD On"))
+                {
                     return -1;
+                }
             }
 
             return Convert.ToInt32(firstWD);
@@ -196,11 +239,17 @@ namespace JeTeeS.TES.HelperFunctions
             AnimatorControllerLayer currentLayer = new AnimatorControllerLayer();
             int firstWD = -2;
             foreach (var layer in controller.layers)
+            {
                 layerQueue.Enqueue(layer);
+            }
 
             while ((currentLayer.IsBlendTreeLayer() || firstWD == -2) && layerQueue.Count > 1)
             {
-                if (firstWD == -1) return -1;
+                if (firstWD == -1)
+                {
+                    return -1;
+                }
+                
                 currentLayer = layerQueue.Dequeue();
                 firstWD = currentLayer.FindWDInLayer();
             }
@@ -209,7 +258,9 @@ namespace JeTeeS.TES.HelperFunctions
             {
                 currentLayer = layerQueue.Dequeue();
                 if (currentLayer.FindWDInLayer() != firstWD)
+                {
                     return -1;
+                }
             }
 
             return Convert.ToInt32(firstWD);
@@ -217,11 +268,18 @@ namespace JeTeeS.TES.HelperFunctions
 
         public static bool IsBlendTreeLayer(this AnimatorControllerLayer layer)
         {
-            if (layer == null || layer.stateMachine == null)
+            if (layer?.stateMachine is null)
+            {
                 return false;
+            }
+            
             foreach (var state in layer.stateMachine.states)
+            {
                 if (!state.state.name.Contains("WD On"))
+                {
                     return false;
+                }
+            }
 
             return true;
         }
@@ -233,22 +291,49 @@ namespace JeTeeS.TES.HelperFunctions
                 if (param.name == paramName)
                 {
                     if (param.type != paramType)
+                    {
                         Debug.LogError("Parameter " + param.name + " is of type: " + param.type.ToString() + " not " + paramType.ToString() + "!");
+                    }
+                    
                     return param;
                 }
             }
 
             AnimatorControllerParameter controllerParam = new AnimatorControllerParameter();
             if (paramType == AnimatorControllerParameterType.Float)
-                controllerParam = new AnimatorControllerParameter() { name = paramName, type = paramType, defaultFloat = defaultValue };
+            {
+                controllerParam = new AnimatorControllerParameter()
+                {
+                    name = paramName,
+                    type = paramType,
+                    defaultFloat = defaultValue
+                };
+            }
             else if (paramType == AnimatorControllerParameterType.Int)
-                controllerParam = new AnimatorControllerParameter() { name = paramName, type = paramType, defaultInt = ((int)defaultValue) };
+            {
+                controllerParam = new AnimatorControllerParameter()
+                {
+                    name = paramName,
+                    type = paramType,
+                    defaultInt = ((int)defaultValue)
+                };
+            }
             else if (paramType == AnimatorControllerParameterType.Bool)
-                controllerParam = defaultValue > 0 ? new AnimatorControllerParameter() { name = paramName, type = paramType, defaultBool = true } : new AnimatorControllerParameter() { name = paramName, type = paramType, defaultBool = false };
+            {
+                controllerParam = new AnimatorControllerParameter()
+                {
+                    name = paramName,
+                    type = paramType,
+                    defaultBool = defaultValue > 0
+                };
+            }
             else
+            {
                 Debug.LogError("Parameter " + paramName + " is not a float, int or bool??");
+            }
 
             controller.AddParameter(controllerParam);
+            
             return controller.parameters.Last(x => x.name == paramName && x.type == paramType);
         }
 
@@ -259,15 +344,29 @@ namespace JeTeeS.TES.HelperFunctions
                 if (param.name == name)
                 {
                     if (param.valueType != valueType)
+                    {
                         Debug.LogError("Parameter " + param.name + " is not of type: " + param.valueType.ToString() + "!");
+                    }
+                    
                     return;
                 }
             }
 
             VRCExpressionParameters.Parameter[] newList = new VRCExpressionParameters.Parameter[vrcExpressionParameters.parameters.Length + 1];
             for (int i = 0; i < vrcExpressionParameters.parameters.Length; i++)
+            {
                 newList[i] = vrcExpressionParameters.parameters[i];
-            newList[newList.Length - 1] = new VRCExpressionParameters.Parameter() { name = name, valueType = valueType, networkSynced = isNetworkSynced, saved = isSaved, defaultValue = defaultValue };
+            }
+            
+            newList[newList.Length - 1] = new VRCExpressionParameters.Parameter()
+            {
+                name = name,
+                valueType = valueType,
+                networkSynced = isNetworkSynced,
+                saved = isSaved,
+                defaultValue = defaultValue
+            };
+            
             vrcExpressionParameters.parameters = newList;
         }
 
@@ -285,7 +384,9 @@ namespace JeTeeS.TES.HelperFunctions
                 defaultWeight = defaultWeight,
                 stateMachine = new AnimatorStateMachine() { hideFlags = HideFlags.HideInHierarchy },
             };
+            
             controller.AddLayer(layer);
+            
             return layer;
         }
 
@@ -300,14 +401,23 @@ namespace JeTeeS.TES.HelperFunctions
 
         public static List<AnimatorControllerLayer> FindHiddenIdentifier(this AnimatorController animatorController, string identifierString)
         {
-            if (animatorController == null)
+            if (animatorController is null)
+            {
                 return null;
+            }
+            
             List<AnimatorControllerLayer> returnList = new List<AnimatorControllerLayer>();
 
             foreach (AnimatorControllerLayer layer in animatorController.layers)
+            {
                 foreach (AnimatorStateTransition anyStateTransition in layer.stateMachine.anyStateTransitions)
+                {
                     if (anyStateTransition.isExit && anyStateTransition.mute && anyStateTransition.name == identifierString)
+                    {
                         returnList.Add(layer);
+                    }
+                }
+            }
 
             return returnList;
         }
@@ -319,26 +429,6 @@ namespace JeTeeS.TES.HelperFunctions
                 System.IO.Directory.CreateDirectory(path);
                 AssetDatabase.ImportAsset(path);
             }
-            /*
-            string[] subPaths = path.Split(@"\/".ToCharArray());
-            foreach (string subPath in subPaths) Debug.Log(subPath);
-            string tempPath = "";
-
-            if (subPaths[subPaths.Length - 1].Contains('.')) subPaths = subPaths.Take(subPaths.Length - 1).ToArray();
-            for (int i = 0; i < subPaths.Length; i++)
-            {
-                if (i == 0) tempPath += subPaths[i];
-                else
-                {
-                    if (!AssetDatabase.IsValidFolder(tempPath + "/" + subPaths[i]))
-                    {
-                        Debug.Log("Creating Folder " + subPaths[i] + " at " + tempPath);
-                        AssetDatabase.CreateFolder(tempPath, subPaths[i]);
-                    }
-                    tempPath += "/" + subPaths[i];
-                }
-            }
-            */
         }
 
         public static AnimationClip MakeAAP(string paramName, string saveAssetsTo, float value = 0, float animLength = 1, string assetName = "") => MakeAAP(new[] { paramName }, saveAssetsTo, value, animLength, assetName);
@@ -346,13 +436,21 @@ namespace JeTeeS.TES.HelperFunctions
         public static AnimationClip MakeAAP(string[] paramNames, string saveAssetsTo, float value = 0, float animLength = 1, string assetName = "")
         {
             if (paramNames.Length == 0)
+            {
                 Debug.LogError("param list is empty!");
+            }
+            
             if (assetName == "")
+            {
                 assetName = paramNames[0] + "_AAP " + value;
+            }
+            
             string saveName = assetName.Replace('/', '_').SanitizeFileName();
             AnimationClip animClip = (AnimationClip)AssetDatabase.LoadAssetAtPath(saveAssetsTo + saveName + ".anim", typeof(AnimationClip));
             if (animClip != null)
+            {
                 return animClip;
+            }
 
             ReadyPath(saveAssetsTo);
 
@@ -362,6 +460,7 @@ namespace JeTeeS.TES.HelperFunctions
                 name = assetName,
                 wrapMode = WrapMode.Clamp,
             };
+            
             foreach (string paramName in paramNames)
             {
                 AnimationCurve curve = new AnimationCurve();
@@ -371,10 +470,12 @@ namespace JeTeeS.TES.HelperFunctions
             }
 
             AssetDatabase.CreateAsset(animClip, saveAssetsTo + saveName + ".anim");
+            
             return animClip;
         }
 
         public static string GetAssetPath(this UnityEngine.Object item) => AssetDatabase.GetAssetPath(item);
+        
         public static void SaveToAsset(this UnityEngine.Object item, UnityEngine.Object saveTo) => AssetDatabase.AddObjectToAsset(item, AssetDatabase.GetAssetPath(saveTo));
 
         public static void SaveUnsavedAssetsToController(this AnimatorController controller)
@@ -386,15 +487,22 @@ namespace JeTeeS.TES.HelperFunctions
             foreach (AnimatorControllerLayer layer in controller.layers)
             {
                 if (GetAssetPath(layer.stateMachine) == "")
+                {
                     layer.stateMachine.SaveToAsset(controller);
+                }
+                
                 foreach (var state in layer.stateMachine.states)
+                {
                     states.Add(state);
+                }
 
                 foreach (ChildAnimatorStateMachine tempChildStateMachine in layer.stateMachine.stateMachines)
                 {
                     childStateMachines.Enqueue(tempChildStateMachine);
                     foreach (ChildAnimatorState state in tempChildStateMachine.stateMachine.states)
+                    {
                         states.Add(state);
+                    }
                 }
 
                 while (childStateMachines.Count > 0)
@@ -404,29 +512,48 @@ namespace JeTeeS.TES.HelperFunctions
                     {
                         childStateMachines.Enqueue(tempChildStateMachine);
                         foreach (ChildAnimatorState state in tempChildStateMachine.stateMachine.states)
+                        {
                             states.Add(state);
+                        }
                     }
 
-                    if (GetAssetPath(childStateMachine.stateMachine) == "")
+                    if (string.IsNullOrEmpty(GetAssetPath(childStateMachine.stateMachine)))
+                    {
                         childStateMachine.stateMachine.SaveToAsset(controller);
+                    }
                 }
 
                 foreach (AnimatorStateTransition anyState in layer.stateMachine.anyStateTransitions)
+                {
                     transitions.Add(anyState);
+                }
             }
 
             foreach (ChildAnimatorState state in states)
             {
                 foreach (AnimatorStateTransition transition in state.state.transitions)
+                {
                     transitions.Add(transition);
-                if (GetAssetPath(state.state) == "")
+                }
+                
+                if (string.IsNullOrEmpty(GetAssetPath(state.state)))
+                {
                     state.state.SaveToAsset(controller);
+                }
+                
                 if (state.state.motion is BlendTree tree)
+                {
                     SaveUnsavedBlendtreesToController(tree, controller);
+                }
             }
 
             foreach (AnimatorStateTransition transition in transitions)
-                if (GetAssetPath(transition) == "") transition.SaveToAsset(controller);
+            {
+                if (string.IsNullOrEmpty(GetAssetPath(transition)))
+                {
+                    transition.SaveToAsset(controller);
+                }
+            }
         }
 
         public static void SaveUnsavedBlendtreesToController(BlendTree blendTree, UnityEngine.Object saveTo)
@@ -436,9 +563,18 @@ namespace JeTeeS.TES.HelperFunctions
             while (blendTrees.Count > 0)
             {
                 BlendTree subBlendTree = blendTrees.Dequeue();
-                if (GetAssetPath(subBlendTree) == "") subBlendTree.SaveToAsset(saveTo);
+                if (string.IsNullOrEmpty(GetAssetPath(subBlendTree)))
+                {
+                    subBlendTree.SaveToAsset(saveTo);
+                }
+                
                 foreach (ChildMotion child in subBlendTree.children)
-                    if (child.motion is BlendTree tree) blendTrees.Enqueue(tree);
+                {
+                    if (child.motion is BlendTree tree)
+                    {
+                        blendTrees.Enqueue(tree);
+                    }
+                }
             }
         }
 
@@ -451,20 +587,35 @@ namespace JeTeeS.TES.HelperFunctions
                 BlendTree subBlendTree = blendTrees.Dequeue();
                 AssetDatabase.RemoveObjectFromAsset(subBlendTree);
                 foreach (ChildMotion child in subBlendTree.children)
-                    if (child.motion is BlendTree tree) blendTrees.Enqueue(tree);
+                {
+                    if (child.motion is BlendTree tree)
+                    {
+                        blendTrees.Enqueue(tree);
+                    }
+                }
             }
         }
 
         public static AnimatorControllerParameter AddSmoothedVer(this AnimatorControllerParameter param, float minValue, float maxValue, AnimatorController controller, string smoothedParamName, string saveTo, string smoothingAmountParamName = "SmoothingAmount", string mainBlendTreeIdentifier = "MainBlendTree", string mainBlendTreeLayerName = "MainBlendTree", string smoothingParentTreeName = "SmoothingParentTree", string constantOneName = "ConstantOne")
         {
             BlendTree smoothingParentTree = GetOrGenerateChildTree(controller, smoothingParentTreeName, mainBlendTreeIdentifier, mainBlendTreeLayerName, constantOneName);
+            
             AnimationClip smoothingAnimMin = MakeAAP(smoothedParamName, saveTo, minValue, 1, smoothedParamName + minValue);
             AnimationClip smoothingAnimMax = MakeAAP(smoothedParamName, saveTo, maxValue, 1, smoothedParamName + maxValue);
+            
             controller.AddUniqueParam(smoothingAmountParamName, AnimatorControllerParameterType.Float, 0.1f);
+            
             AnimatorControllerParameter constantOneParam = controller.AddUniqueParam(constantOneName, AnimatorControllerParameterType.Float, 1);
             AnimatorControllerParameter smoothedParam = controller.AddUniqueParam(smoothedParamName);
 
-            BlendTree smoothedValue = new BlendTree() { blendType = BlendTreeType.Simple1D, blendParameter = smoothedParamName, name = smoothedParamName, useAutomaticThresholds = false, hideFlags = HideFlags.HideInHierarchy };
+            BlendTree smoothedValue = new BlendTree()
+            {
+                blendType = BlendTreeType.Simple1D,
+                blendParameter = smoothedParamName,
+                name = smoothedParamName,
+                useAutomaticThresholds = false,
+                hideFlags = HideFlags.HideInHierarchy
+            };
 
             ChildMotion[] tempChildren = new ChildMotion[2];
             tempChildren[0].motion = smoothingAnimMin;
@@ -477,7 +628,15 @@ namespace JeTeeS.TES.HelperFunctions
 
             smoothedValue.children = tempChildren;
 
-            BlendTree originalValue = new BlendTree() { blendType = BlendTreeType.Simple1D, blendParameter = param.name, name = param.name + "_Original", useAutomaticThresholds = false, hideFlags = HideFlags.HideInHierarchy };
+            BlendTree originalValue = new BlendTree()
+            {
+                blendType = BlendTreeType.Simple1D,
+                blendParameter = param.name,
+                name = param.name + "_Original",
+                useAutomaticThresholds = false,
+                hideFlags = HideFlags.HideInHierarchy
+            };
+            
             tempChildren = new ChildMotion[2];
             tempChildren[0].motion = smoothingAnimMin;
             tempChildren[0].timeScale = 1;
@@ -487,7 +646,14 @@ namespace JeTeeS.TES.HelperFunctions
             tempChildren[1].threshold = maxValue;
             originalValue.children = tempChildren;
 
-            BlendTree smoother = new BlendTree() { blendType = BlendTreeType.Simple1D, blendParameter = smoothingAmountParamName, name = param.name + " Smoothing Tree", hideFlags = HideFlags.HideInHierarchy };
+            BlendTree smoother = new BlendTree()
+            {
+                blendType = BlendTreeType.Simple1D,
+                blendParameter = smoothingAmountParamName,
+                name = param.name + " Smoothing Tree",
+                hideFlags = HideFlags.HideInHierarchy
+            };
+            
             smoother.AddChild(smoothedValue);
             smoother.AddChild(originalValue);
             smoother.useAutomaticThresholds = false;
@@ -509,8 +675,12 @@ namespace JeTeeS.TES.HelperFunctions
             {
                 differentialParamName = param1.name + "_Minus_" + param2.name;
                 for (int i = 0; i < differentialParamName.Length; i++)
+                {
                     if (differentialParamName[i] == '/' || differentialParamName[i] == '\\')
+                    {
                         differentialParamName.Remove(i);
+                    }
+                }
             }
 
             AnimatorControllerParameter differentialParam = controller.AddUniqueParam(differentialParamName);
@@ -567,15 +737,16 @@ namespace JeTeeS.TES.HelperFunctions
             return differentialParam;
         }
 
-        public static BlendTree GetOrGenerateMainBlendTree(AnimatorController fxLayer, string mainBlendTreeIdentifier, string layerName, string constantOneName)
-            => GetMainBlendTree(fxLayer, mainBlendTreeIdentifier) ?? GenerateMainBlendTree(fxLayer, mainBlendTreeIdentifier, layerName, constantOneName);
+        public static BlendTree GetOrGenerateMainBlendTree(AnimatorController fxLayer, string mainBlendTreeIdentifier, string layerName, string constantOneName) => GetMainBlendTree(fxLayer, mainBlendTreeIdentifier) ?? GenerateMainBlendTree(fxLayer, mainBlendTreeIdentifier, layerName, constantOneName);
 
         private static BlendTree GetMainBlendTree(AnimatorController fxLayer, string mainBlendTreeIdentifier)
         {
             List<AnimatorControllerLayer> mainBlendTrees = FindHiddenIdentifier(fxLayer, mainBlendTreeIdentifier);
 
             if (mainBlendTrees.Count > 0 && mainBlendTrees[0].stateMachine.states.Length > 0 && mainBlendTrees[0].stateMachine.states[0].state.motion is BlendTree tree)
+            {
                 return tree;
+            }
 
             return null;
         }
@@ -604,8 +775,7 @@ namespace JeTeeS.TES.HelperFunctions
             return (BlendTree)state.motion;
         }
 
-        public static BlendTree GetOrGenerateChildTree(AnimatorController fxLayer, string name, string mainBlendTreeIdentifier, string mainBlendTreeLayerName, string constantOneName)
-            => GetChildTree(fxLayer, name, mainBlendTreeIdentifier, mainBlendTreeLayerName, constantOneName) ?? GenerateChildTree(fxLayer, name, mainBlendTreeIdentifier, mainBlendTreeLayerName, constantOneName);
+        public static BlendTree GetOrGenerateChildTree(AnimatorController fxLayer, string name, string mainBlendTreeIdentifier, string mainBlendTreeLayerName, string constantOneName) => GetChildTree(fxLayer, name, mainBlendTreeIdentifier, mainBlendTreeLayerName, constantOneName) ?? GenerateChildTree(fxLayer, name, mainBlendTreeIdentifier, mainBlendTreeLayerName, constantOneName);
 
         private static BlendTree GenerateChildTree(AnimatorController controller, string name, string mainBlendTreeIdentifier, string mainBlendTreeLayerName, string constantOneName)
         {
@@ -618,6 +788,7 @@ namespace JeTeeS.TES.HelperFunctions
                 blendParameter = constantOneName,
                 name = name,
             };
+            
             mainBlendTree.AddChild(smoothedParentTree);
 
             var tempChildren = mainBlendTree.children;
@@ -632,8 +803,12 @@ namespace JeTeeS.TES.HelperFunctions
             BlendTree mainBlendTree = GetOrGenerateMainBlendTree(controller, mainBlendTreeIdentifier, mainBlendTreeLayerName, constantOneName);
 
             foreach (ChildMotion child in mainBlendTree.children)
+            {
                 if (child.motion.name == name)
+                {
                     return (BlendTree)child.motion;
+                }
+            }
 
             return null;
         }
@@ -641,13 +816,27 @@ namespace JeTeeS.TES.HelperFunctions
         public static int DecimalToBinary(this int i)
         {
             if (i <= 0)
+            {
                 return 0;
+            }
 
             string result = "";
             for (int j = i; j > 0; j /= 2)
+            {
                 result = (j % 2).ToString() + result;
+            }
 
             return Int32.Parse(result);
+        }
+
+        public static int GetParameterCost(this VRCExpressionParameters.Parameter parameter)
+        {
+            return parameter.networkSynced ? 0 : parameter.valueType == VRCExpressionParameters.ValueType.Bool ? 1 : 8;
+        }
+
+        public static string TranslateParameterValueType(this VRCExpressionParameters.ValueType valueType)
+        {
+            return _paramTypes[(int)valueType];
         }
     }
 }

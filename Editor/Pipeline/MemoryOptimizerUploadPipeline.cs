@@ -1,20 +1,18 @@
-﻿#if UNITY_EDITOR
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
+using JeTeeS.MemoryOptimizer.Shared;
 using UnityEngine;
 using VRC.SDK3.Avatars.Components;
 using VRC.SDK3.Avatars.ScriptableObjects;
 using VRC.SDKBase.Editor.BuildPipeline;
 using static JeTeeS.TES.HelperFunctions.TESHelperFunctions;
 
-namespace JeTeeS.MemoryOptimizer
+namespace JeTeeS.MemoryOptimizer.Pipeline
 {
-    public class MemoryOptimizerUploadPipeline : IVRCSDKPreprocessAvatarCallback
+    internal class MemoryOptimizerUploadPipeline : IVRCSDKPreprocessAvatarCallback
     {
-        private readonly string[] _paramTypes = { "Int", "Float", "Bool" };
         private readonly string[] _animatorParamTypes =
         {
             "",
@@ -40,30 +38,30 @@ namespace JeTeeS.MemoryOptimizer
         
         public bool OnPreprocessAvatar(GameObject avatarGameObject)
         {
-            var _vrcAvatarDescriptor = avatarGameObject.GetComponent<VRCAvatarDescriptor>();
+            var vrcAvatarDescriptor = avatarGameObject.GetComponent<VRCAvatarDescriptor>();
             var memoryOptimizer = avatarGameObject.GetComponent<MemoryOptimizerComponent>();
 
-            var parameters = _vrcAvatarDescriptor.expressionParameters?.parameters ?? Array.Empty<VRCExpressionParameters.Parameter>();
+            var parameters = vrcAvatarDescriptor.expressionParameters?.parameters ?? Array.Empty<VRCExpressionParameters.Parameter>();
 
-            Debug.Log($"MemoryOptimizerUploadPipeline.OnPreprocessAvatar running on {avatarGameObject.name} with {parameters.Length} parameters - loaded configuration: {memoryOptimizer.savedParameterConfigurations.Where(p => p.attemptToOptimize).ToList().Count}");
+            Debug.Log($"<color=yellow>[MemoryOptimizer]</color> OnPreprocessAvatar running on {avatarGameObject.name} with {parameters.Length} parameters - loaded configuration: {memoryOptimizer.savedParameterConfigurations.Where(p => p.selected && p.willBeOptimized).ToList().Count}");
 
-            var parametersBoolToOptimize = new List<MemoryOptimizerMain.MemoryOptimizerListData>(0);
-            var parametersIntNFloatToOptimize = new List<MemoryOptimizerMain.MemoryOptimizerListData>(0);
-
-            memoryOptimizer.Refresh();
+            var parametersBoolToOptimize = new List<MemoryOptimizerListData>(0);
+            var parametersIntNFloatToOptimize = new List<MemoryOptimizerListData>(0);
+            
+            var fxLayer = FindFXLayer(vrcAvatarDescriptor);
             
             foreach (var savedParameterConfiguration in memoryOptimizer.savedParameterConfigurations)
             {
                 // find actual parameter
                 VRCExpressionParameters.Parameter parameter = null;
-                if (savedParameterConfiguration.parameterName.StartsWith("VF##_"))
+                if (savedParameterConfiguration.param.name.StartsWith("VF##_"))
                 {
                     parameter = parameters.FirstOrDefault(p =>
                     {
                         if (p.networkSynced)
                         {
                             // match VRCFury parameters by regex replacing VF\d+_ and replacing VF##_ and then matching name and type
-                            if (p.name.StartsWith("VF") && new Regex("^VF\\d+_").Replace(p.name, string.Empty).Equals(savedParameterConfiguration.parameterName.Replace("VF##_", string.Empty)) && _paramTypes[(int)p.valueType].Equals(savedParameterConfiguration.parameterType))
+                            if (p.name.StartsWith("VF") && new Regex("^VF\\d+_").Replace(p.name, string.Empty).Equals(savedParameterConfiguration.param.name.Replace("VF##_", string.Empty)) && p.valueType == savedParameterConfiguration.param.valueType)
                             {
                                 return true;
                             }
@@ -79,7 +77,7 @@ namespace JeTeeS.MemoryOptimizer
                         if (p.networkSynced)
                         {
                             // match parameters by name and type
-                            if (p.name.Equals(savedParameterConfiguration.parameterName) && _paramTypes[(int)p.valueType].Equals(savedParameterConfiguration.parameterType))
+                            if (p.name.Equals(savedParameterConfiguration.param.name) && p.valueType == savedParameterConfiguration.param.valueType)
                             {
                                 return true;
                             }
@@ -94,7 +92,10 @@ namespace JeTeeS.MemoryOptimizer
                     continue;
                 }
 
-                var fxLayer = FindFXLayer(_vrcAvatarDescriptor);
+                // create pure copy to reference the proper parameter
+                var pure = savedParameterConfiguration.Pure();
+                pure.param = parameter;
+                
                 // add the parameter to the fx layer if it's missing
                 if (fxLayer.parameters.All(p => !p.name.Equals(parameter.name)))
                 {
@@ -114,30 +115,33 @@ namespace JeTeeS.MemoryOptimizer
                     fxLayer.AddUniqueParam(parameter.name, type);
                 }
                 
-                if (savedParameterConfiguration.attemptToOptimize && savedParameterConfiguration.willOptimize)
+                if (savedParameterConfiguration.selected && savedParameterConfiguration.willBeOptimized)
                 {
-                    Debug.Log($"MemoryOptimizerUploadPipeline.OnPreprocessAvatar {savedParameterConfiguration.parameterName} will be optimized.");
-                    
-                    var data = new MemoryOptimizerMain.MemoryOptimizerListData(parameter, savedParameterConfiguration.attemptToOptimize, savedParameterConfiguration.willOptimize);
-                
-                    switch (parameter.valueType)
+                    switch (savedParameterConfiguration.param.valueType)
                     {
                         case VRCExpressionParameters.ValueType.Bool:
-                            parametersBoolToOptimize.Add(data);
+                            parametersBoolToOptimize.Add(pure);
                             break;
                         case VRCExpressionParameters.ValueType.Int:
                         case VRCExpressionParameters.ValueType.Float:
-                            parametersIntNFloatToOptimize.Add(data);
+                            
+                            parametersIntNFloatToOptimize.Add(pure);
                             break;
                     }
                 }
             }
+
+            if (parametersBoolToOptimize.Any() || parametersIntNFloatToOptimize.Any())
+            {
+                MemoryOptimizerMain.InstallMemOpt(vrcAvatarDescriptor, fxLayer, vrcAvatarDescriptor.expressionParameters, parametersBoolToOptimize, parametersIntNFloatToOptimize, memoryOptimizer.syncSteps, memoryOptimizer.stepDelay, memoryOptimizer.changeDetection, memoryOptimizer.wdOption, "Assets/TES/MemOpt");
             
-            MemoryOptimizerMain.InstallMemOpt(_vrcAvatarDescriptor, FindFXLayer(_vrcAvatarDescriptor), _vrcAvatarDescriptor.expressionParameters, parametersBoolToOptimize, parametersIntNFloatToOptimize, memoryOptimizer.syncSteps, 0.2f, memoryOptimizer.changeDetection, 0, "Assets/TES/MemOpt");
-            
-            return _vrcAvatarDescriptor.expressionParameters?.CalcTotalCost() < VRCExpressionParameters.MAX_PARAMETER_COST;
+                Debug.Log($"<color=yellow>[MemoryOptimizer]</color> OnPreprocessAvatar optimized:\n- Bools:\n{string.Join("\n", parametersBoolToOptimize.Select(p => $" > {p.param.name}"))}\n- IntNFloats:\n{string.Join("\n", parametersIntNFloatToOptimize.Select(p => $" > {p.param.name}"))}");
+                
+                return vrcAvatarDescriptor.expressionParameters?.CalcTotalCost() < VRCExpressionParameters.MAX_PARAMETER_COST;
+            }
+
+            Debug.Log("<color=yellow>[MemoryOptimizer]</color> System was not installed as there were no parameters to optimize.");
+            return true;
         }
     }
 }
-
-#endif

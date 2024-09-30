@@ -1,10 +1,8 @@
-﻿#if UNITY_EDITOR
-
-using System.IO;
+﻿using System.IO;
 using UnityEditor;
 using UnityEngine;
 
-namespace JeTeeS.MemoryOptimizer
+namespace JeTeeS.MemoryOptimizer.Patcher
 {
     internal static class MemoryOptimizerVRCFuryPatcher
     {
@@ -13,7 +11,7 @@ namespace JeTeeS.MemoryOptimizer
 
         private static void Load()
         {
-            if (_refFinalValidationService is null)
+            if (_refFinalValidationService is null || !_refIsPatched)
             {
                 if (AssetDatabase.LoadAssetAtPath<MonoScript>("Packages/com.vrcfury.vrcfury/Editor/VF/Service/FinalValidationService.cs") is MonoScript scriptToPatch)
                 {
@@ -25,8 +23,8 @@ namespace JeTeeS.MemoryOptimizer
         
         public static bool AreVRCFuryScriptsPatched()
         {
-#if VRCFury_Installed
-#if !VRCFury_Tested
+#if MemoryOptimizer_VRCFury_IsInstalled
+#if !MemoryOptimizer_VRCFury_IsTested
             Debug.LogWarning($"The pipeline is running on an untested version of VRCFury, probably fine though.");
 #endif
             Load();
@@ -39,8 +37,8 @@ namespace JeTeeS.MemoryOptimizer
         
         public static bool PatchVRCFuryScripts()
         {
-#if VRCFury_Installed
-#if !VRCFury_Tested
+#if MemoryOptimizer_VRCFury_IsInstalled
+#if !MemoryOptimizer_VRCFury_IsTested
             Debug.LogWarning($"The pipeline is running on an untested version of VRCFury, probably fine though.");
 #endif
             Load();
@@ -62,9 +60,9 @@ namespace JeTeeS.MemoryOptimizer
             }
 
             return AreVRCFuryScriptsPatched();
+#else
+            return true;
 #endif
         }
     }
 }
-
-#endif

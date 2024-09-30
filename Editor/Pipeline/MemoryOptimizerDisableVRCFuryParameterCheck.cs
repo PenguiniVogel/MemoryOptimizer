@@ -1,14 +1,13 @@
-﻿#if UNITY_EDITOR
-
-using System;
+﻿using System;
 using System.IO;
+using JeTeeS.MemoryOptimizer.Patcher;
 using UnityEditor;
 using UnityEngine;
 using VRC.SDKBase.Editor.BuildPipeline;
 
-namespace JeTeeS.MemoryOptimizer
+namespace JeTeeS.MemoryOptimizer.Pipeline
 {
-    public class MemoryOptimizerDisableVRCFuryParameterCheck : IVRCSDKPreprocessAvatarCallback
+    internal class MemoryOptimizerDisableVRCFuryParameterCheck : IVRCSDKPreprocessAvatarCallback
     {
         // run before VRCFury does
         public int callbackOrder => -20000;
@@ -19,5 +18,3 @@ namespace JeTeeS.MemoryOptimizer
         }
     }
 }
-
-#endif
