@@ -81,3 +81,32 @@ It is generally recommended to have as few sync steps as possible, as the more s
 
 > [!TIP]
 > By default the sync steps slider is limited to 4 steps, but this can be unlocked in the settings.
+
+## How to use with VRCFury
+
+> [!NOTE]
+> VRCFury does offer a component "Parameter Compressor" (formerly "Unlimited Parameters") though **MemoryOptimizer** offers more fine control of which parameters you would like to optimize.
+
+> [!TIP]
+> This component is not exclusive to be used with VRCFury, it works without it as well.
+
+
+If you wish to use this with VRCFury, you will need to add the MemoryOptimizerComponent to your avatar.
+
+> [!WARNING]
+> The component needs to be placed on the same object where the `VRC Avatar Descriptor` is present.
+
+<img src="https://github.com/JeTeeS/MemoryOptimizer/raw/main/Media/preview-component.gif" height="770" alt="MemoryOptimizer Component">
+
+From there just click `Configure` and you have the same workflow as above ([**How to use**](https://github.com/JeTeeS/MemoryOptimizer#parameters-selection)), but with a major difference: We resolve VRCFury parameters (to the best of our ability) so you can configure those without needing to create a build of the Avatar!
+
+<img src="https://github.com/JeTeeS/MemoryOptimizer/raw/main/Media/use-component.gif" height="569" alt="MemoryOptimizer Component Usage">
+
+> [!NOTE]
+> Whenever you are done, remember to press `Save` at the bottom to actually save your optimizer configuration.
+
+### How does it work in comparison?
+
+The core difference from this to the normal workflow is that the MemoryOptimizer gets installed **during** the upload rather than before, which means whenever you upload, it will process the optimization configuration and apply it!
+
+When used with VRCFury, it runs after VRCFury is done with all its magic, and then collects and maps the parameters so the configured ones get optimized. 
