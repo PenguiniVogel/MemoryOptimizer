@@ -1,20 +1,28 @@
 ﻿using System;
+using System.Linq;
 using JeTeeS.MemoryOptimizer.Patcher;
 using JeTeeS.TES.HelperFunctions;
 using UnityEditor;
 using UnityEngine;
+using static JeTeeS.MemoryOptimizer.Shared.MemoryOptimizerConstants;
 
 namespace JeTeeS.MemoryOptimizer
 {
     [CustomEditor(typeof(MemoryOptimizerComponent))]
     internal class MemoryOptimizerComponentEditor : Editor
     {
-        private const string EditorKeyInspectComponent = "dev.jetees.memoryoptimizer_inspectcomponent";
-        private const string EditorKeyInspectParameters = "dev.jetees.memoryoptimizer_inspectparameters";
+        private MemoryOptimizerComponent _component;
         
+        private void Awake()
+        {
+            _component ??= (MemoryOptimizerComponent)target;
+            
+            _component.Load();
+        }
+
         public override void OnInspectorGUI()
         {
-            var typed = ((MemoryOptimizerComponent)target);
+            bool hasErrors = _component.componentIssues.Any(x => x.level >= 3);
             
 #if MemoryOptimizer_VRCFury_IsInstalled
             if (MemoryOptimizerVRCFuryPatcher.AreVRCFuryScriptsPatched())
@@ -35,16 +43,44 @@ namespace JeTeeS.MemoryOptimizer
             
             GUILayout.Space(5);
 #endif
+            if (_component.componentIssues.Any())
+            {
+                using (new MemoryOptimizerWindow.SqueezeScope((0, 0, MemoryOptimizerWindow.SqueezeScope.SqueezeScopeType.Horizontal, EditorStyles.helpBox)))
+                {
+                    GUILayout.Label("Problems:");
+                }
+
+                foreach (var issue in _component.componentIssues)
+                {
+                    var type = issue.level switch
+                    {
+                        0 => MessageType.None,
+                        1 => MessageType.Info,
+                        2 => MessageType.Warning,
+                        3 => MessageType.Error,
+                        _ => MessageType.None
+                    };
+                    
+                    EditorGUILayout.HelpBox(issue.message, type);
+                }
+                
+                GUILayout.Space(5);
+            }
+            
             using (new MemoryOptimizerWindow.SqueezeScope((0, 0, MemoryOptimizerWindow.SqueezeScope.SqueezeScopeType.Horizontal, EditorStyles.helpBox)))
             {
+                GUI.enabled = !hasErrors;
+                
                 if (GUILayout.Button("Configure"))
                 {
-                    typed.Load();
+                    _component.Load();
                 
-                    MemoryOptimizerWindow._component = typed;
+                    MemoryOptimizerWindow._component = _component;
                     EditorWindow window = EditorWindow.GetWindow(typeof(MemoryOptimizerWindow), false, "Memory Optimizer (Configuration)", true);
                     window.minSize = new Vector2(600, 900);
                 }
+
+                GUI.enabled = true;
             }
 
             var foldoutState = EditorGUILayout.Foldout(EditorPrefs.GetBool(EditorKeyInspectComponent), "Component Configuration");
@@ -56,34 +92,28 @@ namespace JeTeeS.MemoryOptimizer
                 using (new MemoryOptimizerWindow.SqueezeScope((0, 0, MemoryOptimizerWindow.SqueezeScope.SqueezeScopeType.Horizontal, EditorStyles.helpBox)))
                 {
                     GUILayout.Label("Write Defaults:");
-                    GUILayout.Label($"{MemoryOptimizerWindow.wdOptions[typed.wdOption]}", GUILayout.Width(100));
+                    GUILayout.Label($"{wdOptions[_component.wdOption]}", GUILayout.Width(100));
                 }
                 
                 using (new MemoryOptimizerWindow.SqueezeScope((0, 0, MemoryOptimizerWindow.SqueezeScope.SqueezeScopeType.Horizontal, EditorStyles.helpBox)))
                 {
                     GUILayout.Label("Change Detection");
 
-                    GUI.backgroundColor = typed.changeDetection ? Color.green : Color.red;
-                    GUILayout.Button(typed.changeDetection ? "On" : "Off", GUILayout.Width(100));
+                    GUI.backgroundColor = _component.changeDetection ? Color.green : Color.red;
+                    GUILayout.Button(_component.changeDetection ? "On" : "Off", GUILayout.Width(100));
                     GUI.backgroundColor = Color.white;
                 }
                 
                 using (new MemoryOptimizerWindow.SqueezeScope((0, 0, MemoryOptimizerWindow.SqueezeScope.SqueezeScopeType.Horizontal, EditorStyles.helpBox)))
                 {
                     GUILayout.Label("Sync Steps:");
-                    GUILayout.Label($"{typed.syncSteps}", GUILayout.Width(100));
+                    GUILayout.Label($"{_component.syncSteps}", GUILayout.Width(100));
                 }
             
                 using (new MemoryOptimizerWindow.SqueezeScope((0, 0, MemoryOptimizerWindow.SqueezeScope.SqueezeScopeType.Horizontal, EditorStyles.helpBox)))
                 {
                     GUILayout.Label("Step Delay:");
-                    GUILayout.Label($"{typed.stepDelay}s", GUILayout.Width(100));
-                }
-
-                using (new MemoryOptimizerWindow.SqueezeScope((0, 0, MemoryOptimizerWindow.SqueezeScope.SqueezeScopeType.Horizontal, EditorStyles.helpBox)))
-                {
-                    GUILayout.Label("Save Path Override:");
-                    GUILayout.Label($"{typed.savePathOverride?.ToString() ?? "None"}", GUILayout.Width(100));
+                    GUILayout.Label($"{_component.stepDelay}s", GUILayout.Width(100));
                 }
                 
                 GUI.enabled = true;
@@ -92,16 +122,15 @@ namespace JeTeeS.MemoryOptimizer
                 EditorPrefs.SetBool(EditorKeyInspectParameters, foldoutState);
                 if (foldoutState)
                 {
-                    foreach (var savedParameterConfiguration in typed.savedParameterConfigurations)
+                    foreach (var savedParameterConfiguration in _component.savedParameterConfigurations)
                     {
-                        var (parameterName, parameterType, isSelected, willOptimize) = (savedParameterConfiguration.param.name, savedParameterConfiguration.param.valueType.TranslateParameterValueType(), savedParameterConfiguration.selected, savedParameterConfiguration.willBeOptimized);
+                        var (parameterName, parameterType, isSelected, willOptimize) = (savedParameterConfiguration.param.name, savedParameterConfiguration.param.valueType, savedParameterConfiguration.selected, savedParameterConfiguration.willBeOptimized);
 
                         using (new MemoryOptimizerWindow.SqueezeScope((0, 0, MemoryOptimizerWindow.SqueezeScope.SqueezeScopeType.Horizontal)))
                         {
                             GUILayout.Space(5);
-                        
-                            GUILayout.Label(new GUIContent(parameterName, savedParameterConfiguration.info), GUILayout.MinWidth(typed.longestParameterName * 8));
-                            GUILayout.Label($"{parameterType}", GUILayout.Width(50));
+
+                            EditorGUILayout.HelpBox($"{parameterName} - {paramTypes[(int)parameterType]}\n -> {savedParameterConfiguration.info}", MessageType.None);
                         
                             GUI.backgroundColor = isSelected ? (willOptimize ? Color.green : Color.yellow) : Color.red;
                             GUI.enabled = false;

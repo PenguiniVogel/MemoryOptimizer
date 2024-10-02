@@ -9,6 +9,7 @@ using VRC.SDK3.Avatars.Components;
 using VRC.SDK3.Avatars.ScriptableObjects;
 using VRC.SDKBase;
 using JeTeeS.TES.HelperFunctions;
+using static JeTeeS.MemoryOptimizer.Shared.MemoryOptimizerConstants;
 using static JeTeeS.TES.HelperFunctions.TESHelperFunctions;
 
 namespace JeTeeS.MemoryOptimizer
@@ -18,27 +19,8 @@ namespace JeTeeS.MemoryOptimizer
         internal class ParamDriversAndStates
         {
             public VRCAvatarParameterDriver paramDriver = ScriptableObject.CreateInstance<VRCAvatarParameterDriver>();
-            public List<AnimatorState> states = new List<AnimatorState>();
+            public List<AnimatorState> states = new();
         }
-
-        private const string discordLink = "https://discord.gg/N7snuJhzkd";
-        private const string prefix = "MemOpt_";
-        private const string syncingLayerName = prefix + "Syncing Layer";
-        private const string syncingLayerIdentifier = prefix + "Syncer";
-        private const string mainBlendTreeIdentifier = prefix + "MainBlendTree";
-        private const string mainBlendTreeLayerName = prefix + "Main BlendTree";
-        private const string smoothingAmountParamName = prefix + "ParamSmoothing";
-        private const string smoothedVerSuffix = "_S";
-        private const string SmoothingTreeName = "SmoothingParentTree";
-        private const string DifferentialTreeName = "DifferentialParentTree";
-        private const string DifferentialSuffix = "_Delta";
-        private const string constantOneName = prefix + "ConstantOne";
-        private const string indexerParamName = prefix + "Indexer ";
-        private const string boolSyncerParamName = prefix + "BoolSyncer ";
-        private const string intNFloatSyncerParamName = prefix + "IntNFloatSyncer ";
-        private const string oneFrameBufferAnimName = prefix + "OneFrameBuffer";
-        private const string oneSecBufferAnimName = prefix + "OneSecBuffer";
-        private const float changeSensitivity = 0.05f;
 
         private class MemoryOptimizerState
         {
@@ -55,50 +37,30 @@ namespace JeTeeS.MemoryOptimizer
             public AnimatorControllerLayer syncingLayer;
         }
 
-        public static bool IsSystemInstalled(AnimatorController controller)
+        public static void InstallMemOpt(VRCAvatarDescriptor avatarIn, AnimatorController fxLayer, VRCExpressionParameters expressionParameters, List<MemoryOptimizerListData> optimizeBoolList, List<MemoryOptimizerListData> optimizeIntNFloatList, int syncSteps, float stepDelay, bool generateChangeDetection, int wdOption, string mainFilePath)
         {
-            if (controller is null)
-            {
-                return false;
-            }
-            
-            if (controller.FindHiddenIdentifier(syncingLayerIdentifier).Count == 1)
-            {
-                return true;
-            }
-            
-            if (controller.FindHiddenIdentifier(mainBlendTreeIdentifier).Count == 1)
-            {
-                return true;
-            }
-
-            return false;
-        }
-
-        public static void InstallMemOpt(VRCAvatarDescriptor avatarIn, AnimatorController fxLayer, VRCExpressionParameters expressionParameters, List<MemoryOptimizerListData> boolsToOptimize, List<MemoryOptimizerListData> intsNFloatsToOptimize, int syncSteps, float stepDelay, bool generateChangeDetection, int wdOption, string mainFilePath)
-        {
-            string generatedAssetsFilePath = mainFilePath + "/GeneratedAssets/";
+            var generatedAssetsFilePath = mainFilePath + "/GeneratedAssets/";
             ReadyPath(generatedAssetsFilePath);
 
-            MemoryOptimizerState optimizerState = new MemoryOptimizerState
+            MemoryOptimizerState optimizerState = new()
             {
                 avatar = avatarIn,
                 FXController = fxLayer,
                 expressionParameters = expressionParameters,
-                boolsToOptimize = boolsToOptimize,
-                intsNFloatsToOptimize = intsNFloatsToOptimize,
-                boolsNIntsWithCopies = new List<AnimatorControllerParameter>(),
+                boolsToOptimize = optimizeBoolList,
+                intsNFloatsToOptimize = optimizeIntNFloatList,
+                boolsNIntsWithCopies = new(),
 
-                syncingLayer = new AnimatorControllerLayer
+                syncingLayer = new()
                 {
                     defaultWeight = 1,
                     name = syncingLayerName,
-                    stateMachine = new AnimatorStateMachine
+                    stateMachine = new()
                     {
                         hideFlags = HideFlags.HideInHierarchy,
                         name = syncingLayerName,
-                        anyStatePosition = new Vector3(20, 20, 0),
-                        entryPosition = new Vector3(20, 50, 0)
+                        anyStatePosition = new(20, 20, 0),
+                        entryPosition = new(20, 50, 0)
                     }
                 }
             };
@@ -107,22 +69,21 @@ namespace JeTeeS.MemoryOptimizer
             (optimizerState.oneFrameBuffer, optimizerState.oneSecBuffer) = BufferAnims(generatedAssetsFilePath);
 
             fxLayer.AddUniqueParam("IsLocal", AnimatorControllerParameterType.Bool);
-
-            AnimatorControllerParameter constantOneParam = fxLayer.AddUniqueParam(constantOneName, AnimatorControllerParameterType.Float, 1);
+            fxLayer.AddUniqueParam(constantOneName, AnimatorControllerParameterType.Float, 1);
             fxLayer.AddUniqueParam(smoothingAmountParamName);
 
-            string syncStepsBinary = (syncSteps - 1).DecimalToBinary().ToString();
-            for (int i = 0; i < syncStepsBinary.Count(); i++)
+            var syncStepsBinary = (syncSteps - 1).DecimalToBinary().ToString();
+            for (var i = 0; i < syncStepsBinary.Count(); i++)
             {
                 AddUniqueSyncedParamToController(indexerParamName + (i + 1).ToString(), fxLayer, expressionParameters, AnimatorControllerParameterType.Bool, VRCExpressionParameters.ValueType.Bool);
             }
 
-            for (int j = 0; j < boolsToOptimize.Count / syncSteps; j++)
+            for (var j = 0; j < optimizeBoolList.Count / syncSteps; j++)
             {
                 AddUniqueSyncedParamToController(boolSyncerParamName + j, optimizerState.FXController, optimizerState.expressionParameters, AnimatorControllerParameterType.Bool, VRCExpressionParameters.ValueType.Bool);
             }
 
-            for (int j = 0; j < intsNFloatsToOptimize.Count / syncSteps; j++)
+            for (var j = 0; j < optimizeIntNFloatList.Count / syncSteps; j++)
             {
                 AddUniqueSyncedParamToController(intNFloatSyncerParamName + j, optimizerState.FXController, optimizerState.expressionParameters, AnimatorControllerParameterType.Int, VRCExpressionParameters.ValueType.Int);
             }
@@ -134,7 +95,7 @@ namespace JeTeeS.MemoryOptimizer
                 GenerateDeltas(optimizerState, generatedAssetsFilePath);
             }
 
-            AnimatorState localEntryState = optimizerState.localStateMachine.AddState("Entry", new Vector3(0, 100, 0));
+            var localEntryState = optimizerState.localStateMachine.AddState("Entry", new(0, 100, 0));
             localEntryState.hideFlags = HideFlags.HideInHierarchy;
             localEntryState.motion = optimizerState.oneFrameBuffer;
 
@@ -147,30 +108,27 @@ namespace JeTeeS.MemoryOptimizer
 
             CreateParameterDrivers(optimizerState, syncSteps, generateChangeDetection);
 
-            bool setWD = true;
-            if (wdOption == 0)
+            var setWD = true;
+            switch (wdOption)
             {
-                int foundWD = fxLayer.FindWDInController();
-                if (foundWD == -1)
+                case 0:
                 {
-                    setWD = true;
+                    var foundWD = fxLayer.FindWDInController();
+                    setWD = foundWD switch
+                    {
+                        -1 => true,
+                        0 => false,
+                        1 => true,
+                        _ => setWD
+                    };
+                    break;
                 }
-                else if (foundWD == 0)
-                {
+                case 1:
                     setWD = false;
-                }
-                else if (foundWD == 1)
-                {
+                    break;
+                default:
                     setWD = true;
-                }
-            }
-            else if (wdOption == 1)
-            {
-                setWD = false;
-            }
-            else
-            {
-                setWD = true;
+                    break;
             }
 
             foreach (var state in optimizerState.syncingLayer.FindAllStatesInLayer())
@@ -181,12 +139,12 @@ namespace JeTeeS.MemoryOptimizer
             optimizerState.FXController.AddLayer(optimizerState.syncingLayer);
             optimizerState.FXController.SaveUnsavedAssetsToController();
 
-            foreach (var param in boolsToOptimize)
+            foreach (var param in optimizeBoolList)
             {
                 param.param.networkSynced = false;
             }
 
-            foreach (var param in intsNFloatsToOptimize)
+            foreach (var param in optimizeIntNFloatList)
             {
                 param.param.networkSynced = false;
             }
@@ -197,33 +155,34 @@ namespace JeTeeS.MemoryOptimizer
 
             SetupParameterDrivers(optimizerState);
             
-            EditorApplication.Beep();
+            // EditorApplication.Beep();
             Debug.Log("<color=yellow>[MemoryOptimizer]</color> Installation Complete");
         }
 
         private static void GenerateDeltas(MemoryOptimizerState optimizerState, string generatedAssetsFilePath)
         {
-            List<MemoryOptimizerListData> boolsToOptimize = optimizerState.boolsToOptimize;
-            List<MemoryOptimizerListData> intsNFloatsToOptimize = optimizerState.intsNFloatsToOptimize;
+            var boolsToOptimize = optimizerState.boolsToOptimize;
+            var intsNFloatsToOptimize = optimizerState.intsNFloatsToOptimize;
 
-            List<AnimatorControllerParameter> boolsDifferentials = new List<AnimatorControllerParameter>();
-            List<AnimatorControllerParameter> intsNFloatsDifferentials = new List<AnimatorControllerParameter>();
+            List<AnimatorControllerParameter> boolsDifferentials = new();
+            List<AnimatorControllerParameter> intsNFloatsDifferentials = new();
             
             //Add smoothed ver of every param in the list
-            foreach (MemoryOptimizerListData param in boolsToOptimize)
+            foreach (var param in boolsToOptimize)
             {
-                List<AnimatorControllerParameter> paramMatches = optimizerState.FXController.parameters.Where(x => x.name == param.param.name).ToList();
-                AnimatorControllerParameter paramMatch = paramMatches[0];
+                var paramMatches = optimizerState.FXController.parameters.Where(x => x.name == param.param.name).ToList();
+                var paramMatch = paramMatches[0];
                 if (paramMatch.type is AnimatorControllerParameterType.Int or AnimatorControllerParameterType.Bool)
                 {
-                    AnimatorControllerParameter paramCopy = optimizerState.FXController.AddUniqueParam(prefix + paramMatch.name + "_Copy");
+                    var paramCopy = optimizerState.FXController.AddUniqueParam(prefix + paramMatch.name + "_Copy");
                     optimizerState.boolsNIntsWithCopies.Add(paramMatch);
-                    AnimatorControllerParameter smoothedParam = paramCopy.AddSmoothedVer(0, 1, optimizerState.FXController, prefix + paramCopy.name + smoothedVerSuffix, generatedAssetsFilePath, smoothingAmountParamName, mainBlendTreeIdentifier, mainBlendTreeLayerName, SmoothingTreeName, constantOneName);
+                    
+                    var smoothedParam = paramCopy.AddSmoothedVer(0, 1, optimizerState.FXController, prefix + paramCopy.name + smoothedVerSuffix, generatedAssetsFilePath, smoothingAmountParamName, mainBlendTreeIdentifier, mainBlendTreeLayerName, SmoothingTreeName, constantOneName);
                     boolsDifferentials.Add(AddParamDifferential(paramCopy, smoothedParam, optimizerState.FXController, generatedAssetsFilePath, 0, 1, prefix + paramCopy.name + DifferentialSuffix, mainBlendTreeIdentifier, mainBlendTreeLayerName, DifferentialTreeName, constantOneName));
                 }
                 else if (paramMatch.type == AnimatorControllerParameterType.Float)
                 {
-                    AnimatorControllerParameter smoothedParam = paramMatch.AddSmoothedVer(0, 1, optimizerState.FXController, prefix + paramMatch.name + smoothedVerSuffix, generatedAssetsFilePath, smoothingAmountParamName, mainBlendTreeIdentifier, mainBlendTreeLayerName, SmoothingTreeName, constantOneName);
+                    var smoothedParam = paramMatch.AddSmoothedVer(0, 1, optimizerState.FXController, prefix + paramMatch.name + smoothedVerSuffix, generatedAssetsFilePath, smoothingAmountParamName, mainBlendTreeIdentifier, mainBlendTreeLayerName, SmoothingTreeName, constantOneName);
                     boolsDifferentials.Add(AddParamDifferential(paramMatch, smoothedParam, optimizerState.FXController, generatedAssetsFilePath, 0, 1, prefix + paramMatch.name + DifferentialSuffix, mainBlendTreeIdentifier, mainBlendTreeLayerName, DifferentialTreeName, constantOneName));
                 }
                 else
@@ -232,21 +191,22 @@ namespace JeTeeS.MemoryOptimizer
                 }
             }
 
-            foreach (MemoryOptimizerListData param in intsNFloatsToOptimize)
+            foreach (var param in intsNFloatsToOptimize)
             {
-                List<AnimatorControllerParameter> paramMatches = optimizerState.FXController.parameters.Where(x => x.name == param.param.name).ToList();
-                AnimatorControllerParameter paramMatch = paramMatches[0];
+                var paramMatches = optimizerState.FXController.parameters.Where(x => x.name == param.param.name).ToList();
+                var paramMatch = paramMatches[0];
                 
                 if (paramMatch.type is AnimatorControllerParameterType.Int or AnimatorControllerParameterType.Bool)
                 {
-                    AnimatorControllerParameter paramCopy = optimizerState.FXController.AddUniqueParam(prefix + paramMatch.name + "_Copy");
+                    var paramCopy = optimizerState.FXController.AddUniqueParam(prefix + paramMatch.name + "_Copy");
                     optimizerState.boolsNIntsWithCopies.Add(paramMatch);
-                    AnimatorControllerParameter smoothedParam = paramCopy.AddSmoothedVer(0, 1, optimizerState.FXController, prefix + paramCopy.name + smoothedVerSuffix, generatedAssetsFilePath, smoothingAmountParamName, mainBlendTreeIdentifier, mainBlendTreeLayerName, SmoothingTreeName, constantOneName);
+                    
+                    var smoothedParam = paramCopy.AddSmoothedVer(0, 1, optimizerState.FXController, prefix + paramCopy.name + smoothedVerSuffix, generatedAssetsFilePath, smoothingAmountParamName, mainBlendTreeIdentifier, mainBlendTreeLayerName, SmoothingTreeName, constantOneName);
                     intsNFloatsDifferentials.Add(AddParamDifferential(paramCopy, smoothedParam, optimizerState.FXController, generatedAssetsFilePath, 0, 1, prefix + paramCopy.name + DifferentialSuffix, mainBlendTreeIdentifier, mainBlendTreeLayerName, DifferentialTreeName, constantOneName));
                 }
                 else if (paramMatch.type == AnimatorControllerParameterType.Float)
                 {
-                    AnimatorControllerParameter smoothedParam = paramMatch.AddSmoothedVer(-1, 1, optimizerState.FXController, prefix + paramMatch.name + smoothedVerSuffix, generatedAssetsFilePath, smoothingAmountParamName, mainBlendTreeIdentifier, mainBlendTreeLayerName, SmoothingTreeName, constantOneName);
+                    var smoothedParam = paramMatch.AddSmoothedVer(-1, 1, optimizerState.FXController, prefix + paramMatch.name + smoothedVerSuffix, generatedAssetsFilePath, smoothingAmountParamName, mainBlendTreeIdentifier, mainBlendTreeLayerName, SmoothingTreeName, constantOneName);
                     intsNFloatsDifferentials.Add(AddParamDifferential(paramMatch, smoothedParam, optimizerState.FXController, generatedAssetsFilePath, -1, 1, prefix + paramMatch.name + DifferentialSuffix, mainBlendTreeIdentifier, mainBlendTreeLayerName, DifferentialTreeName, constantOneName));
                 }
                 else
@@ -261,30 +221,30 @@ namespace JeTeeS.MemoryOptimizer
 
         private static void CreateTransitions(MemoryOptimizerState optimizerState, int syncSteps, float stepDelay, bool generateChangeDetection)
         {
-            List<MemoryOptimizerListData> boolsToOptimize = optimizerState.boolsToOptimize;
-            List<MemoryOptimizerListData> intsNFloatsToOptimize = optimizerState.intsNFloatsToOptimize;
-            List<AnimatorState> localSetStates = optimizerState.localSetStates;
-            List<AnimatorState> remoteSetStates = optimizerState.remoteSetStates;
-            List<AnimatorState> localResetStates = optimizerState.localResetStates;
-            List<AnimatorControllerParameter> boolsDifferentials = optimizerState.boolsDifferentials;
-            List<AnimatorControllerParameter> intsNFloatsDifferentials = optimizerState.intsNFloatsDifferentials;
-            AnimatorStateMachine remoteStateMachine = optimizerState.remoteStateMachine;
+            var optimizeBoolList = optimizerState.boolsToOptimize;
+            var optimizeIntBFloatList = optimizerState.intsNFloatsToOptimize;
+            var localSetStates = optimizerState.localSetStates;
+            var remoteSetStates = optimizerState.remoteSetStates;
+            var localResetStates = optimizerState.localResetStates;
+            var differentialsBool = optimizerState.boolsDifferentials;
+            var differentialsIntNFloat = optimizerState.intsNFloatsDifferentials;
+            var remoteStateMachine = optimizerState.remoteStateMachine;
 
-            string syncStepsBinary = (syncSteps - 1).DecimalToBinary().ToString();
+            var syncStepsBinary = (syncSteps - 1).DecimalToBinary().ToString();
 
-            AnimatorState waitForIndexer = remoteStateMachine.AddState("WaitForIndexer", new Vector3(0, 400, 0));
+            var waitForIndexer = remoteStateMachine.AddState("WaitForIndexer", new(0, 400, 0));
             waitForIndexer.hideFlags = HideFlags.HideInHierarchy;
             waitForIndexer.motion = optimizerState.oneFrameBuffer;
 
-            for (int i = 0; i < syncSteps; i++)
+            for (var i = 0; i < syncSteps; i++)
             {
-                string currentIndex = i.DecimalToBinary().ToString();
+                var currentIndex = i.DecimalToBinary().ToString();
                 while (currentIndex.Length < syncStepsBinary.Length)
                 {
                     currentIndex = "0" + currentIndex;
                 }
 
-                AnimatorStateTransition toSetterTransition = new AnimatorStateTransition()
+                AnimatorStateTransition toSetterTransition = new()
                 {
                     destinationState = remoteSetStates[i],
                     exitTime = 0,
@@ -295,15 +255,15 @@ namespace JeTeeS.MemoryOptimizer
                 };
 
 
-                //Make a list of transitions that go to the "wait" state
-                List<AnimatorStateTransition> toWaitTransitions = new List<AnimatorStateTransition>();
+                // Make a list of transitions that go to the "wait" state
+                List<AnimatorStateTransition> toWaitTransitions = new();
 
-                //loop through each character of the binary number
-                for (int j = 1; j <= currentIndex.Length; j++)
+                // loop through each character of the binary number
+                for (var j = 1; j <= currentIndex.Length; j++)
                 {
-                    bool isZero = currentIndex[currentIndex.Length - j].ToString() == "0";
+                    var isZero = currentIndex[^j].ToString() == "0";
                     toSetterTransition.AddCondition(isZero ? AnimatorConditionMode.IfNot : AnimatorConditionMode.If, 0, indexerParamName + j);
-                    toWaitTransitions.Add(new AnimatorStateTransition
+                    toWaitTransitions.Add(new()
                     {
                         destinationState = waitForIndexer,
                         exitTime = 0,
@@ -319,10 +279,10 @@ namespace JeTeeS.MemoryOptimizer
                 {
                     void SetupLocalResetStateTransitions(string differentialName)
                     {
-                        //add transitions from value changed state to appropriate reset state
-                        foreach (AnimatorState state in localSetStates)
+                        // add transitions from value changed state to appropriate reset state
+                        foreach (var state in localSetStates)
                         {
-                            AnimatorStateTransition transition = new AnimatorStateTransition
+                            AnimatorStateTransition transition = new()
                             {
                                 destinationState = localResetStates[i],
                                 exitTime = 0,
@@ -335,7 +295,7 @@ namespace JeTeeS.MemoryOptimizer
                             transition.AddCondition(AnimatorConditionMode.Less, changeSensitivity * -1, differentialName);
                             state.AddTransition(transition);
 
-                            transition = new AnimatorStateTransition
+                            transition = new()
                             {
                                 destinationState = localResetStates[i],
                                 exitTime = 0,
@@ -350,21 +310,21 @@ namespace JeTeeS.MemoryOptimizer
                         }
                     }
 
-                    for (int j = 0; j < boolsToOptimize.Count / syncSteps; j++)
+                    for (var j = 0; j < optimizeBoolList.Count / syncSteps; j++)
                     {
-                        string differentialName = boolsDifferentials[i * (boolsToOptimize.Count() / syncSteps) + j].name;
+                        var differentialName = differentialsBool[i * (optimizeBoolList.Count() / syncSteps) + j].name;
                         SetupLocalResetStateTransitions(differentialName);
                     }
 
-                    for (int j = 0; j < intsNFloatsToOptimize.Count / syncSteps; j++)
+                    for (var j = 0; j < optimizeIntBFloatList.Count / syncSteps; j++)
                     {
-                        string differentialName = intsNFloatsDifferentials[i * (intsNFloatsToOptimize.Count() / syncSteps) + j].name;
+                        var differentialName = differentialsIntNFloat[i * (optimizeIntBFloatList.Count() / syncSteps) + j].name;
                         SetupLocalResetStateTransitions(differentialName);
                     }
                 }
 
                 // add the transitions from remote set states to the wait state
-                foreach (AnimatorStateTransition transition in toWaitTransitions)
+                foreach (var transition in toWaitTransitions)
                 {
                     remoteSetStates[i].AddTransition(transition);
                 }
@@ -373,7 +333,7 @@ namespace JeTeeS.MemoryOptimizer
                 waitForIndexer.AddTransition(toSetterTransition);
             }
 
-            for (int i = 0; i < localSetStates.Count; i++)
+            for (var i = 0; i < localSetStates.Count; i++)
             {
                 localSetStates[i].AddTransition(new AnimatorStateTransition()
                 {
@@ -389,34 +349,34 @@ namespace JeTeeS.MemoryOptimizer
 
         private static void CreateParameterDrivers(MemoryOptimizerState optimizerState, int syncSteps, bool generateChangeDetection)
         {
-            List<AnimatorState> localSetStates = optimizerState.localSetStates;
-            List<AnimatorState> localResetStates = optimizerState.localResetStates;
-            List<AnimatorState> remoteSetStates = optimizerState.remoteSetStates;
+            var localSetStates = optimizerState.localSetStates;
+            var localResetStates = optimizerState.localResetStates;
+            var remoteSetStates = optimizerState.remoteSetStates;
             
-            List<MemoryOptimizerListData> boolsToOptimize = optimizerState.boolsToOptimize;
-            List<MemoryOptimizerListData> intsNFloatsToOptimize = optimizerState.intsNFloatsToOptimize;
+            var optimizeBoolList = optimizerState.boolsToOptimize;
+            var optimizeIntNFloatList = optimizerState.intsNFloatsToOptimize;
 
-            List<ParamDriversAndStates> localSettersParameterDrivers = new List<ParamDriversAndStates>();
-            List<ParamDriversAndStates> remoteSettersParameterDrivers = new List<ParamDriversAndStates>();
+            List<ParamDriversAndStates> localSettersParameterDrivers = new();
+            List<ParamDriversAndStates> remoteSettersParameterDrivers = new();
             
-            string syncStepsBinary = (syncSteps - 1).DecimalToBinary().ToString();
-            for (int i = 0; i < syncSteps; i++)
+            var syncStepsBinary = (syncSteps - 1).DecimalToBinary().ToString();
+            for (var i = 0; i < syncSteps; i++)
             {
-                string currentIndex = i.DecimalToBinary().ToString();
+                var currentIndex = i.DecimalToBinary().ToString();
                 while (currentIndex.Length < syncStepsBinary.Length)
                 {
                     currentIndex = "0" + currentIndex;
                 }
 
-                localSettersParameterDrivers.Add(new ParamDriversAndStates());
+                localSettersParameterDrivers.Add(new());
                 localSettersParameterDrivers.Last().states.Add(localSetStates[i]);
                 if (generateChangeDetection)
                 {
                     localSettersParameterDrivers.Last().states.Add(localResetStates[i]);
 
-                    foreach (AnimatorControllerParameter param in optimizerState.boolsNIntsWithCopies)
+                    foreach (var param in optimizerState.boolsNIntsWithCopies)
                     {
-                        localSettersParameterDrivers.Last().paramDriver.parameters.Add(new VRC_AvatarParameterDriver.Parameter()
+                        localSettersParameterDrivers.Last().paramDriver.parameters.Add(new()
                         {
                             name = prefix + param.name + "_Copy",
                             source = param.name,
@@ -425,28 +385,39 @@ namespace JeTeeS.MemoryOptimizer
                     }
                 }
 
-                remoteSettersParameterDrivers.Add(new ParamDriversAndStates());
+                remoteSettersParameterDrivers.Add(new());
                 remoteSettersParameterDrivers.Last().states.Add(remoteSetStates[i]);
 
-                //loop through each character of the binary number
-                for (int j = 1; j <= currentIndex.Length; j++)
+                // loop through each character of the binary number
+                for (var j = 1; j <= currentIndex.Length; j++)
                 {
-                    int value = currentIndex[currentIndex.Length - j].ToString() == "0" ? 0 : 1;
-                    localSettersParameterDrivers.Last().paramDriver.parameters.Add(new VRC_AvatarParameterDriver.Parameter() { name = indexerParamName + j, value = value, type = VRC_AvatarParameterDriver.ChangeType.Set });
-                    remoteSettersParameterDrivers.Last().paramDriver.parameters.Add(new VRC_AvatarParameterDriver.Parameter() { name = indexerParamName + j, value = value, type = VRC_AvatarParameterDriver.ChangeType.Set });
+                    var value = currentIndex[^j].ToString() == "0" ? 0 : 1;
+                    localSettersParameterDrivers.Last().paramDriver.parameters.Add(new()
+                    {
+                        name = indexerParamName + j,
+                        value = value,
+                        type = VRC_AvatarParameterDriver.ChangeType.Set
+                    });
+                    
+                    remoteSettersParameterDrivers.Last().paramDriver.parameters.Add(new()
+                    {
+                        name = indexerParamName + j,
+                        value = value,
+                        type = VRC_AvatarParameterDriver.ChangeType.Set
+                    });
                 }
 
-                for (int j = 0; j < boolsToOptimize.Count / syncSteps; j++)
+                for (var j = 0; j < optimizeBoolList.Count / syncSteps; j++)
                 {
-                    VRCExpressionParameters.Parameter param = boolsToOptimize.ElementAt(i * (boolsToOptimize.Count() / syncSteps) + j).param;
-                    localSettersParameterDrivers.Last().paramDriver.parameters.Add(new VRC_AvatarParameterDriver.Parameter()
+                    var param = optimizeBoolList.ElementAt(i * (optimizeBoolList.Count() / syncSteps) + j).param;
+                    localSettersParameterDrivers.Last().paramDriver.parameters.Add(new()
                     {
                         name = boolSyncerParamName + j,
                         source = param.name,
                         type = VRC_AvatarParameterDriver.ChangeType.Copy
                     });
                     
-                    remoteSettersParameterDrivers.Last().paramDriver.parameters.Add(new VRC_AvatarParameterDriver.Parameter()
+                    remoteSettersParameterDrivers.Last().paramDriver.parameters.Add(new()
                     {
                         name = param.name,
                         source = boolSyncerParamName + j,
@@ -454,12 +425,12 @@ namespace JeTeeS.MemoryOptimizer
                     });
                 }
 
-                for (int j = 0; j < intsNFloatsToOptimize.Count / syncSteps; j++)
+                for (var j = 0; j < optimizeIntNFloatList.Count / syncSteps; j++)
                 {
-                    VRCExpressionParameters.Parameter param = intsNFloatsToOptimize.ElementAt(i * (intsNFloatsToOptimize.Count() / syncSteps) + j).param;
+                    var param = optimizeIntNFloatList.ElementAt(i * (optimizeIntNFloatList.Count() / syncSteps) + j).param;
                     if (param.valueType == VRCExpressionParameters.ValueType.Int)
                     {
-                        localSettersParameterDrivers.Last().paramDriver.parameters.Add(new VRC_AvatarParameterDriver.Parameter()
+                        localSettersParameterDrivers.Last().paramDriver.parameters.Add(new()
                         {
                             name = intNFloatSyncerParamName + j,
                             source = param.name,
@@ -467,7 +438,7 @@ namespace JeTeeS.MemoryOptimizer
                         });
                         
                         remoteSettersParameterDrivers.Last().paramDriver.parameters.Add(
-                            new VRC_AvatarParameterDriver.Parameter()
+                            new()
                             {
                                 name = param.name,
                                 source = intNFloatSyncerParamName + j,
@@ -476,7 +447,7 @@ namespace JeTeeS.MemoryOptimizer
                     }
                     else if (param.valueType == VRCExpressionParameters.ValueType.Float)
                     {
-                        localSettersParameterDrivers.Last().paramDriver.parameters.Add(new VRC_AvatarParameterDriver.Parameter()
+                        localSettersParameterDrivers.Last().paramDriver.parameters.Add(new()
                         {
                             name = intNFloatSyncerParamName + j,
                             source = param.name,
@@ -488,18 +459,17 @@ namespace JeTeeS.MemoryOptimizer
                             sourceMax = 1
                         });
                         
-                        remoteSettersParameterDrivers.Last().paramDriver.parameters.Add(
-                            new VRC_AvatarParameterDriver.Parameter()
-                            {
-                                name = param.name,
-                                source = intNFloatSyncerParamName + j,
-                                type = VRC_AvatarParameterDriver.ChangeType.Copy,
-                                convertRange = true,
-                                destMin = 0,
-                                destMax = 1,
-                                sourceMin = 0,
-                                sourceMax = 255
-                            });
+                        remoteSettersParameterDrivers.Last().paramDriver.parameters.Add(new()
+                        {
+                            name = param.name,
+                            source = intNFloatSyncerParamName + j,
+                            type = VRC_AvatarParameterDriver.ChangeType.Copy,
+                            convertRange = true,
+                            destMin = 0,
+                            destMax = 1,
+                            sourceMin = 0,
+                            sourceMax = 255
+                        });
                     }
                     else
                     {
@@ -514,32 +484,32 @@ namespace JeTeeS.MemoryOptimizer
 
         private static void CreateStates(MemoryOptimizerState optimizerState, int syncSteps, float stepDelay, bool generateChangeDetection)
         {
-            string syncStepsBinary = (syncSteps - 1).DecimalToBinary().ToString();
+            var syncStepsBinary = (syncSteps - 1).DecimalToBinary().ToString();
             
-            AnimatorStateMachine localStateMachine = optimizerState.localStateMachine;
-            AnimatorStateMachine remoteStateMachine = optimizerState.remoteStateMachine;
+            var localStateMachine = optimizerState.localStateMachine;
+            var remoteStateMachine = optimizerState.remoteStateMachine;
 
-            List<AnimatorState> localSetStates = new List<AnimatorState>();
-            List<AnimatorState> localResetStates = new List<AnimatorState>();
-            List<AnimatorState> remoteSetStates = new List<AnimatorState>();
+            List<AnimatorState> localSetStates = new();
+            List<AnimatorState> localResetStates = new();
+            List<AnimatorState> remoteSetStates = new();
             
-            for (int i = 0; i < syncSteps; i++)
+            for (var i = 0; i < syncSteps; i++)
             {
                 // convert i to binary, so it can be used for the binary counter
-                string currentIndex = i.DecimalToBinary().ToString();
+                var currentIndex = i.DecimalToBinary().ToString();
                 while (currentIndex.Length < syncStepsBinary.Length)
                 {
                     currentIndex = "0" + currentIndex;
                 }
 
                 // add the local set and reset states
-                localSetStates.Add(localStateMachine.AddState("Set Value " + (i + 1), AngleRadiusToPos(((float)i / syncSteps + 0.5f) * (float)Math.PI * 2f, 400f, new Vector3(0, 600, 0))));
+                localSetStates.Add(localStateMachine.AddState("Set Value " + (i + 1), AngleRadiusToPos(((float)i / syncSteps + 0.5f) * (float)Math.PI * 2f, 400f, new(0, 600, 0))));
                 localSetStates.Last().hideFlags = HideFlags.HideInHierarchy;
                 localSetStates.Last().motion = optimizerState.oneSecBuffer;
 
                 if (generateChangeDetection)
                 {
-                    localResetStates.Add(localStateMachine.AddState("Reset Change Detection " + (i + 1), AngleRadiusToPos(((float)i / syncSteps + 0.5f) * (float)Math.PI * 2f + ((float)Math.PI * 0.25f), 480f, new Vector3(0, 600, 0))));
+                    localResetStates.Add(localStateMachine.AddState("Reset Change Detection " + (i + 1), AngleRadiusToPos(((float)i / syncSteps + 0.5f) * (float)Math.PI * 2f + ((float)Math.PI * 0.25f), 480f, new(0, 600, 0))));
                     localResetStates.Last().hideFlags = HideFlags.HideInHierarchy;
                     localResetStates.Last().motion = optimizerState.oneSecBuffer;
 
@@ -555,7 +525,7 @@ namespace JeTeeS.MemoryOptimizer
                 }
 
                 // add the remote set states
-                remoteSetStates.Add(remoteStateMachine.AddState("Set values for index " + (i + 1), AngleRadiusToPos(((float)i / syncSteps + 0.5f) * (float)Math.PI * 2f, 250f, new Vector3(0, 400, 0))));
+                remoteSetStates.Add(remoteStateMachine.AddState("Set values for index " + (i + 1), AngleRadiusToPos(((float)i / syncSteps + 0.5f) * (float)Math.PI * 2f, 250f, new(0, 400, 0))));
                 remoteSetStates.Last().hideFlags = HideFlags.HideInHierarchy;
                 remoteSetStates.Last().motion = optimizerState.oneFrameBuffer;
             }
@@ -568,22 +538,24 @@ namespace JeTeeS.MemoryOptimizer
         private static (AnimationClip oneFrameBuffer, AnimationClip oneSecBuffer) BufferAnims(string generatedAssetsFilePath)
         {
             // create and overwrite single frame buffer animation
-            AnimationClip oneFrameBuffer = new AnimationClip() { name = oneFrameBufferAnimName, };
-            AnimationCurve oneFrameBufferCurve = new AnimationCurve();
+            AnimationClip oneFrameBuffer = new() { name = oneFrameBufferAnimName, };
+            AnimationCurve oneFrameBufferCurve = new();
             
             oneFrameBufferCurve.AddKey(0, 0);
             oneFrameBufferCurve.AddKey(1 / 60f, 1);
+            
             oneFrameBuffer.SetCurve("", typeof(GameObject), "DO NOT CHANGE THIS ANIMATION", oneFrameBufferCurve);
             
             AssetDatabase.DeleteAsset(generatedAssetsFilePath + oneFrameBuffer.name + ".anim");
             AssetDatabase.CreateAsset(oneFrameBuffer, generatedAssetsFilePath + oneFrameBuffer.name + ".anim");
 
             // create and overwrite one second buffer animation
-            AnimationClip oneSecBuffer = new AnimationClip() { name = oneSecBufferAnimName, };
-            AnimationCurve oneSecBufferCurve = new AnimationCurve();
+            AnimationClip oneSecBuffer = new() { name = oneSecBufferAnimName, };
+            AnimationCurve oneSecBufferCurve = new();
             
             oneSecBufferCurve.AddKey(0, 0);
             oneSecBufferCurve.AddKey(1, 1);
+            
             oneSecBuffer.SetCurve("", typeof(GameObject), "DO NOT CHANGE THIS ANIMATION", oneSecBufferCurve);
             
             AssetDatabase.DeleteAsset(generatedAssetsFilePath + oneSecBuffer.name + ".anim");
@@ -594,33 +566,33 @@ namespace JeTeeS.MemoryOptimizer
 
         private static void SetupParameterDrivers(MemoryOptimizerState optimizerState)
         {
-            List<ParamDriversAndStates> localSettersParameterDrivers = optimizerState.localSettersParameterDrivers;
-            List<ParamDriversAndStates> remoteSettersParameterDrivers = optimizerState.remoteSettersParameterDrivers;
-            List<AnimatorState> localSetStates = optimizerState.localSetStates;
-            List<AnimatorState> localResetStates = optimizerState.localResetStates;
+            var localSettersParameterDrivers = optimizerState.localSettersParameterDrivers;
+            var remoteSettersParameterDrivers = optimizerState.remoteSettersParameterDrivers;
+            var localSetStates = optimizerState.localSetStates;
+            var localResetStates = optimizerState.localResetStates;
 
-            foreach (ParamDriversAndStates driver in localSettersParameterDrivers)
+            foreach (var driver in localSettersParameterDrivers)
             {
-                foreach (AnimatorState state in driver.states)
+                foreach (var state in driver.states)
                 {
-                    VRCAvatarParameterDriver temp = state.AddStateMachineBehaviour<VRCAvatarParameterDriver>();
+                    var temp = state.AddStateMachineBehaviour<VRCAvatarParameterDriver>();
                     temp.parameters = driver.paramDriver.parameters.ToList();
                 }
             }
 
-            foreach (ParamDriversAndStates driver in remoteSettersParameterDrivers)
+            foreach (var driver in remoteSettersParameterDrivers)
             {
-                foreach (AnimatorState state in driver.states)
+                foreach (var state in driver.states)
                 {
-                    VRCAvatarParameterDriver temp = state.AddStateMachineBehaviour<VRCAvatarParameterDriver>();
+                    var temp = state.AddStateMachineBehaviour<VRCAvatarParameterDriver>();
                     temp.parameters = driver.paramDriver.parameters;
                 }
             }
 
-            foreach (AnimatorState state in localSetStates)
+            foreach (var state in localSetStates)
             {
-                VRCAvatarParameterDriver temp = (VRCAvatarParameterDriver)state.behaviours[0];
-                temp.parameters.Add(new VRC_AvatarParameterDriver.Parameter()
+                var temp = (VRCAvatarParameterDriver)state.behaviours[0];
+                temp.parameters.Add(new()
                 {
                     name = smoothingAmountParamName,
                     type = VRC_AvatarParameterDriver.ChangeType.Set,
@@ -628,10 +600,10 @@ namespace JeTeeS.MemoryOptimizer
                 });
             }
 
-            foreach (AnimatorState state in localResetStates)
+            foreach (var state in localResetStates)
             {
-                VRCAvatarParameterDriver temp = (VRCAvatarParameterDriver)state.behaviours[0];
-                temp.parameters.Add(new VRC_AvatarParameterDriver.Parameter()
+                var temp = (VRCAvatarParameterDriver)state.behaviours[0];
+                temp.parameters.Add(new()
                 {
                     name = smoothingAmountParamName,
                     type = VRC_AvatarParameterDriver.ChangeType.Set,
@@ -642,27 +614,27 @@ namespace JeTeeS.MemoryOptimizer
 
         private static void CreateLocalRemoteSplit(MemoryOptimizerState optimizerState)
         {
-            AnimatorControllerLayer syncingLayer = optimizerState.syncingLayer;
-            AnimatorState localRemoteSplitState = syncingLayer.stateMachine.AddState("Local/Remote split", position: new Vector3(0, 100, 0));
+            var syncingLayer = optimizerState.syncingLayer;
+            var localRemoteSplitState = syncingLayer.stateMachine.AddState("Local/Remote split", position: new(0, 100, 0));
             
             localRemoteSplitState.motion = optimizerState.oneFrameBuffer;
             localRemoteSplitState.hideFlags = HideFlags.HideInHierarchy;
             syncingLayer.stateMachine.defaultState = localRemoteSplitState;
 
-            AnimatorStateMachine localStateMachine = syncingLayer.stateMachine.AddStateMachine("Local", position: new Vector3(100, 200, 0));
+            var localStateMachine = syncingLayer.stateMachine.AddStateMachine("Local", position: new(100, 200, 0));
             localStateMachine.hideFlags = HideFlags.HideInHierarchy;
 
-            AnimatorStateMachine remoteStateMachine = syncingLayer.stateMachine.AddStateMachine("Remote", position: new Vector3(-100, 200, 0));
+            var remoteStateMachine = syncingLayer.stateMachine.AddStateMachine("Remote", position: new(-100, 200, 0));
             remoteStateMachine.hideFlags = HideFlags.HideInHierarchy;
 
-            localStateMachine.anyStatePosition = new Vector3(20, 20, 0);
-            localStateMachine.entryPosition = new Vector3(20, 50, 0);
+            localStateMachine.anyStatePosition = new(20, 20, 0);
+            localStateMachine.entryPosition = new(20, 50, 0);
 
-            remoteStateMachine.anyStatePosition = new Vector3(20, 20, 0);
-            remoteStateMachine.entryPosition = new Vector3(20, 50, 0);
+            remoteStateMachine.anyStatePosition = new(20, 20, 0);
+            remoteStateMachine.entryPosition = new(20, 50, 0);
 
-            AnimatorStateTransition localTransition = localRemoteSplitState.AddTransition(localStateMachine);
-            AnimatorStateTransition remoteTransition = localRemoteSplitState.AddTransition(remoteStateMachine);
+            var localTransition = localRemoteSplitState.AddTransition(localStateMachine);
+            var remoteTransition = localRemoteSplitState.AddTransition(remoteStateMachine);
 
             // in some rare cases some types of FaceTracking (or other OSC based components) use a float-based IsLocal parameter
             // this will prevent the layer from working correctly as the transition binding no longer matches the type
@@ -683,11 +655,11 @@ namespace JeTeeS.MemoryOptimizer
 
         public static void UninstallMemOpt(VRCAvatarDescriptor avatar, AnimatorController fxLayer, VRCExpressionParameters expressionParameters)
         {
-            List<VRCExpressionParameters.Parameter> generatedExpressionParams = new List<VRCExpressionParameters.Parameter>();
-            List<VRCExpressionParameters.Parameter> optimizedParams = new List<VRCExpressionParameters.Parameter>();
-            List<AnimatorControllerParameter> generatedAnimatorParams = new List<AnimatorControllerParameter>();
+            List<VRCExpressionParameters.Parameter> generatedExpressionParams = new();
+            List<VRCExpressionParameters.Parameter> optimizedParams = new();
+            List<AnimatorControllerParameter> generatedAnimatorParams = new();
             
-            foreach (AnimatorControllerParameter controllerParam in fxLayer.parameters)
+            foreach (var controllerParam in fxLayer.parameters)
             {
                 if (controllerParam.name.Contains(prefix))
                 {
@@ -695,8 +667,8 @@ namespace JeTeeS.MemoryOptimizer
                 }
             }
 
-            List<AnimatorControllerLayer> mainBlendTreeLayers = fxLayer.FindHiddenIdentifier(mainBlendTreeIdentifier);
-            List<AnimatorControllerLayer> syncingLayers = fxLayer.FindHiddenIdentifier(syncingLayerIdentifier);
+            var mainBlendTreeLayers = fxLayer.FindHiddenIdentifier(mainBlendTreeIdentifier);
+            var syncingLayers = fxLayer.FindHiddenIdentifier(syncingLayerIdentifier);
 
             if (mainBlendTreeLayers.Count > 1)
             {
@@ -708,7 +680,7 @@ namespace JeTeeS.MemoryOptimizer
 
             if (syncingLayers.Count != 1)
             {
-                string s = (mainBlendTreeLayers.Count > 1) ? "many" : "few";
+                var s = (mainBlendTreeLayers.Count > 1) ? "many" : "few";
                 if (UninstallErrorDialogWithDiscordLink($"Too {s} syncing layers found", $"Too {s} syncing layers found! {syncingLayers.Count} found. \nPlease join the discord for support. \nKeep in mind there are backups made by default by the script!", discordLink) != 0)
                 {
                     return;
@@ -716,26 +688,20 @@ namespace JeTeeS.MemoryOptimizer
             }
             else
             {
-                List<ChildAnimatorState> states = syncingLayers[0].FindAllStatesInLayer();
-                List<ChildAnimatorState> setStates = states.Where(x => x.state.name.Contains("Set Value ")).ToList();
-                foreach (ChildAnimatorState state in setStates)
+                var states = syncingLayers[0].FindAllStatesInLayer();
+                var setStates = states.Where(x => x.state.name.Contains("Set Value ")).ToList();
+                foreach (var state in setStates)
                 {
-                    VRCAvatarParameterDriver paramdriver = (VRCAvatarParameterDriver)state.state.behaviours[0];
-                    List<VRC_AvatarParameterDriver.Parameter> paramdriverParams = paramdriver.parameters;
-                    foreach (VRC_AvatarParameterDriver.Parameter param in paramdriverParams)
+                    var avatarParameterDriver = (VRCAvatarParameterDriver)state.state.behaviours[0];
+                    var avatarParameterDriverParameters = avatarParameterDriver.parameters;
+                    foreach (var param in avatarParameterDriverParameters.Where(param => !string.IsNullOrEmpty(param.source)))
                     {
-                        if (!String.IsNullOrEmpty(param.source))
-                        {
-                            foreach (VRCExpressionParameters.Parameter item in expressionParameters.parameters.Where(x => x.name == param.source))
-                            {
-                                optimizedParams.Add(item);
-                            }
-                        }
+                        optimizedParams.AddRange(expressionParameters.parameters.Where(x => x.name == param.source));
                     }
                 }
             }
 
-            foreach (VRCExpressionParameters.Parameter item in expressionParameters.parameters.Where(x => x.name.Contains(prefix)))
+            foreach (var item in expressionParameters.parameters.Where(x => x.name.Contains(prefix)))
             {
                 generatedExpressionParams.Add(item);
             }
@@ -764,32 +730,32 @@ namespace JeTeeS.MemoryOptimizer
                 }
             }
 
-            foreach (AnimatorControllerLayer mainBlendTreeLayer in mainBlendTreeLayers)
+            foreach (var mainBlendTreeLayer in mainBlendTreeLayers)
             {
                 // Debug.Log("<color=yellow>[MemoryOptimizer]</color> Animator layer " + mainBlendTreeLayer.name + " of index " + fxLayer.FindLayerIndex(mainBlendTreeLayer) + " is being deleted");
                 DeleteBlendTreeFromAsset((BlendTree)mainBlendTreeLayer.stateMachine.states[0].state.motion);
                 fxLayer.RemoveLayer(mainBlendTreeLayer);
             }
 
-            foreach (AnimatorControllerLayer syncingLayer in syncingLayers)
+            foreach (var syncingLayer in syncingLayers)
             {
                 // Debug.Log("<color=yellow>[MemoryOptimizer]</color> Animator layer " + syncingLayer.name + " of index " + fxLayer.FindLayerIndex(syncingLayer) + " is being deleted");
                 fxLayer.RemoveLayer(syncingLayer);
             }
 
-            foreach (VRCExpressionParameters.Parameter param in generatedExpressionParams)
+            foreach (var param in generatedExpressionParams)
             {
                 // Debug.Log("<color=yellow>[MemoryOptimizer]</color> Expression param " + param.name + "  of type: " + param.valueType + " is being deleted");
                 expressionParameters.parameters = expressionParameters.parameters.Where(x => x != param).ToArray();
             }
 
-            foreach (AnimatorControllerParameter param in generatedAnimatorParams)
+            foreach (var param in generatedAnimatorParams)
             {
                 // Debug.Log("<color=yellow>[MemoryOptimizer]</color> Controller param " + param.name + "  of type: " + param.type + " is being deleted");
                 fxLayer.RemoveParameter(param);
             }
 
-            foreach (VRCExpressionParameters.Parameter param in optimizedParams)
+            foreach (var param in optimizedParams)
             {
                 // Debug.Log("<color=yellow>[MemoryOptimizer]</color> Optimized param " + param.name + "  of type: " + param.valueType + " setting to sync");
                 param.networkSynced = true;

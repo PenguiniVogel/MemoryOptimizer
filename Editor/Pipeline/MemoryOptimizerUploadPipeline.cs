@@ -2,35 +2,20 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
+using JeTeeS.MemoryOptimizer.Helper;
 using JeTeeS.MemoryOptimizer.Shared;
+using UnityEditor.Animations;
 using UnityEngine;
 using VRC.SDK3.Avatars.Components;
 using VRC.SDK3.Avatars.ScriptableObjects;
 using VRC.SDKBase.Editor.BuildPipeline;
+using static JeTeeS.MemoryOptimizer.Shared.MemoryOptimizerConstants;
 using static JeTeeS.TES.HelperFunctions.TESHelperFunctions;
 
 namespace JeTeeS.MemoryOptimizer.Pipeline
 {
     internal class MemoryOptimizerUploadPipeline : IVRCSDKPreprocessAvatarCallback
     {
-        private readonly string[] _animatorParamTypes =
-        {
-            "",
-            // 1
-            "Float",
-            "",
-            // 3
-            "Int",
-            // 4
-            "Bool",
-            "",
-            "",
-            "",
-            "",
-            // 9
-            "Trigger"
-        };
-        
         // VRCFury runs at -10000
         // VRChat strips components at -1024
         // So we preprocess in between but not too close to the stripping of components 
@@ -47,14 +32,49 @@ namespace JeTeeS.MemoryOptimizer.Pipeline
                 return true;
             }
             
+            var fxLayer = FindFXLayer(vrcAvatarDescriptor);
             var parameters = vrcAvatarDescriptor.expressionParameters?.parameters ?? Array.Empty<VRCExpressionParameters.Parameter>();
 
+            // skip if we have no fx layer, or system is installed, or we don't have parameters
+            if (fxLayer is null || MemoryOptimizerHelper.IsSystemInstalled(fxLayer) || parameters.Length <= 0)
+            {
+                return true;
+            }
+
+            var (copiedFxLayerSuccess, copiedFxLayer) = MakeCopyOf<AnimatorController>(fxLayer, $"Packages/dev.jetees.memoryoptimizer/Temp/Generated_{avatarGameObject.name.SanitizeFileName()}/", $"{prefix}_GeneratedFxLayer");
+            var (copiedExpressionParametersSuccess, copiedExpressionParameters) = MakeCopyOf<VRCExpressionParameters>(vrcAvatarDescriptor.expressionParameters, $"Packages/dev.jetees.memoryoptimizer/Temp/Generated_{avatarGameObject.name.SanitizeFileName()}/", $"{prefix}_GeneratedExpressionParameters");
+
+            // throw error when copy fails
+            if (!copiedFxLayerSuccess || !copiedExpressionParametersSuccess)
+            {
+                return false;
+            }
+
+            // setup copies
+            // we make the avatar reference copies to not break any original assets
+            fxLayer = copiedFxLayer;
+            parameters = copiedExpressionParameters.parameters;
+
+            vrcAvatarDescriptor.expressionParameters = copiedExpressionParameters;
+            for (int i = 0, l = vrcAvatarDescriptor.baseAnimationLayers.Length; i < l; i++)
+            {
+                // find the fx layer and replace it
+                if (vrcAvatarDescriptor.baseAnimationLayers[i] is { type: VRCAvatarDescriptor.AnimLayerType.FX, animatorController: not null })
+                {
+                    var layer = vrcAvatarDescriptor.baseAnimationLayers[i];
+
+                    layer.animatorController = fxLayer;
+                    
+                    vrcAvatarDescriptor.baseAnimationLayers[i] = layer;
+
+                    break;
+                }
+            }
+            
             Debug.Log($"<color=yellow>[MemoryOptimizer]</color> OnPreprocessAvatar running on {avatarGameObject.name} with {parameters.Length} parameters - loaded configuration: {memoryOptimizer.savedParameterConfigurations.Where(p => p.selected && p.willBeOptimized).ToList().Count}");
 
             var parametersBoolToOptimize = new List<MemoryOptimizerListData>(0);
             var parametersIntNFloatToOptimize = new List<MemoryOptimizerListData>(0);
-            
-            var fxLayer = FindFXLayer(vrcAvatarDescriptor);
             
             foreach (var savedParameterConfiguration in memoryOptimizer.savedParameterConfigurations)
             {

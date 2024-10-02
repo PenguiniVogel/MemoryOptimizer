@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using JeTeeS.MemoryOptimizer.Helper;
 using JeTeeS.MemoryOptimizer.Shared;
 using JeTeeS.TES.HelperFunctions;
 using UnityEditor;
@@ -11,19 +12,12 @@ using VRC.SDK3.Avatars.ScriptableObjects;
 using static JeTeeS.MemoryOptimizer.MemoryOptimizerWindow.SqueezeScope;
 using static JeTeeS.MemoryOptimizer.MemoryOptimizerWindow.SqueezeScope.SqueezeScopeType;
 using static JeTeeS.TES.HelperFunctions.TESHelperFunctions;
+using static JeTeeS.MemoryOptimizer.Shared.MemoryOptimizerConstants;
 
 namespace JeTeeS.MemoryOptimizer
 {
     internal class MemoryOptimizerWindow : EditorWindow
     {
-        private const string menuPath = "Tools/TES/MemoryOptimizer";
-        private const string defaultSavePath = "Assets/TES/MemOpt";
-        private const string prefKey = "Mem_Opt_Pref_";
-        private const string unlockSyncStepsEPKey = prefKey + "UnlockSyncSteps";
-        private const string backUpModeEPKey = prefKey + "BackUpMode";
-        private const string savePathPPKey = prefKey + "SavePath";
-        private const int maxUnsyncedParams = 8192;
-
         internal static MemoryOptimizerComponent _component;
         
         private string currentSavePath;
@@ -31,9 +25,6 @@ namespace JeTeeS.MemoryOptimizer
         
         private bool unlockSyncSteps = false;
         private int backupMode = 0;
-        
-        internal static readonly string[] wdOptions = { "Auto-Detect", "Off", "On" };
-        internal static readonly string[] backupModes = { "On", "Off", "Ask" };
 
         private int tab = 0;
         private Vector2 scrollPosition;
@@ -99,7 +90,6 @@ namespace JeTeeS.MemoryOptimizer
                 syncSteps = _component.syncSteps;
                 stepDelay = _component.stepDelay;
                 changeDetectionEnabled = _component.changeDetection;
-                savePathOverride = _component.savePathOverride;
             }
         }
 
@@ -308,12 +298,12 @@ namespace JeTeeS.MemoryOptimizer
                                         GUI.enabled = false;
 
                                         EditorGUILayout.TextArea(expressionParameters.parameters[i].name, GUILayout.MinWidth(longestParamName * 8));
-                                        EditorGUILayout.Popup((int)expressionParameters.parameters[i].valueType, _paramTypes, GUILayout.Width(50));
+                                        EditorGUILayout.Popup((int)expressionParameters.parameters[i].valueType, paramTypes, GUILayout.Width(50));
                                         
                                         GUI.enabled = true;
 
                                         // System already installed
-                                        if (MemoryOptimizerMain.IsSystemInstalled(avatarFXLayer))
+                                        if (MemoryOptimizerHelper.IsSystemInstalled(avatarFXLayer))
                                         {
                                             GUI.backgroundColor = new Color(0.1f, 0.1f, 0.1f, 1);
                                             GUI.enabled = false;
@@ -402,7 +392,7 @@ namespace JeTeeS.MemoryOptimizer
                             
                             using (new SqueezeScope((0, 0, EditorH, EditorStyles.helpBox)))
                             {
-                                if (MemoryOptimizerMain.IsSystemInstalled(avatarFXLayer))
+                                if (MemoryOptimizerHelper.IsSystemInstalled(avatarFXLayer))
                                 {
                                     GUI.backgroundColor = Color.black;
                                     GUILayout.Label("System Already Installed!", EditorStyles.boldLabel);
@@ -438,7 +428,7 @@ namespace JeTeeS.MemoryOptimizer
 
                         if (_component is null)
                         {
-                            if (MemoryOptimizerMain.IsSystemInstalled(avatarFXLayer))
+                            if (MemoryOptimizerHelper.IsSystemInstalled(avatarFXLayer))
                             {
                                 if (GUILayout.Button("Uninstall"))
                                 {
@@ -468,7 +458,6 @@ namespace JeTeeS.MemoryOptimizer
                                 _component.syncSteps = syncSteps;
                                 _component.stepDelay = stepDelay;
                                 _component.changeDetection = changeDetectionEnabled;
-                                _component.savePathOverride = savePathOverride;
                                 
                                 foreach (var data in paramList)
                                 {
@@ -488,7 +477,7 @@ namespace JeTeeS.MemoryOptimizer
                                 Close();
                             }
                         }
-                        else if (MemoryOptimizerMain.IsSystemInstalled(avatarFXLayer))
+                        else if (MemoryOptimizerHelper.IsSystemInstalled(avatarFXLayer))
                         {
                             GUI.enabled = false;
                             GUI.backgroundColor = Color.black;
@@ -544,14 +533,18 @@ namespace JeTeeS.MemoryOptimizer
                 case 1:
                     using (new SqueezeScope((0, 0, Vertical, EditorStyles.helpBox)))
                     {
-                        // Backup Mode
-                        using (new SqueezeScope((0, 0, Horizontal, EditorStyles.helpBox)))
+                        // hide backup mode for component editing
+                        if (_component is null)
                         {
-                            EditorGUILayout.LabelField("Backup Mode: ", EditorStyles.boldLabel);
-                            EditorPrefs.SetInt(backUpModeEPKey, EditorGUILayout.Popup(backupMode, backupModes, new GUIStyle(EditorStyles.popup) { fixedHeight = 18, stretchWidth = false }));
+                            // Backup Mode
+                            using (new SqueezeScope((0, 0, Horizontal, EditorStyles.helpBox)))
+                            {
+                                EditorGUILayout.LabelField("Backup Mode: ", EditorStyles.boldLabel);
+                                EditorPrefs.SetInt(backUpModeEPKey, EditorGUILayout.Popup(backupMode, backupModes, new GUIStyle(EditorStyles.popup) { fixedHeight = 18, stretchWidth = false }));
+                            }
+                            
+                            GUILayout.Space(5);
                         }
-
-                        GUILayout.Space(5);
 
                         // Unlock sync steps button
                         GUI.backgroundColor = unlockSyncSteps ? Color.green : Color.red;
@@ -565,6 +558,10 @@ namespace JeTeeS.MemoryOptimizer
 
                         GUILayout.Space(5);
 
+                        if (_component is null)
+                        {
+                            
+                        }
                         // save path
                         using (new SqueezeScope((0, 0, Vertical, EditorStyles.helpBox)))
                         {

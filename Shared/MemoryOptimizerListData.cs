@@ -1,4 +1,6 @@
-﻿using System;
+﻿#if UNITY_EDITOR
+
+using System;
 using UnityEngine;
 using VRC.SDK3.Avatars.ScriptableObjects;
 
@@ -19,3 +21,5 @@ namespace JeTeeS.MemoryOptimizer.Shared
         }
     }
 }
+
+#endif

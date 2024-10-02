@@ -13,6 +13,7 @@ using UnityEngine.Serialization;
 using VRC.SDK3.Avatars.Components;
 using VRC.SDK3.Avatars.ScriptableObjects;
 using VRC.SDKBase;
+using static JeTeeS.MemoryOptimizer.Shared.MemoryOptimizerConstants;
 
 namespace JeTeeS.MemoryOptimizer
 {
@@ -26,9 +27,12 @@ namespace JeTeeS.MemoryOptimizer
         {
             public bool isVRCFuryParameter = false;
             public string info = string.Empty;
-
+            
+            [NonSerialized] private int _hashCode = -1;
+            
             public SavedParameterConfiguration(VRCExpressionParameters.Parameter parameter) : base(parameter, false, false)
             {
+                CalculateHashCode();
             }
             
             public SavedParameterConfiguration(string parameterName, VRCExpressionParameters.ValueType parameterType) : base(new VRCExpressionParameters.Parameter()
@@ -38,11 +42,22 @@ namespace JeTeeS.MemoryOptimizer
                 networkSynced = true
             }, false, false)
             {
+                CalculateHashCode();
             }
 
+            private void CalculateHashCode()
+            {
+                _hashCode = $"name:{this.param.name}-level:{paramTypes[(int)this.param.valueType]}".GetHashCode();
+            }
+            
             public override int GetHashCode()
             {
-                return $"{this.param.name}{TESHelperFunctions._paramTypes[(int)this.param.valueType]}".GetHashCode();
+                if (_hashCode == -1)
+                {
+                    CalculateHashCode();
+                }
+                
+                return _hashCode;
             }
 
             public override bool Equals(object obj)
@@ -52,9 +67,9 @@ namespace JeTeeS.MemoryOptimizer
                     return false;
                 }
 
-                if (obj is SavedParameterConfiguration typed)
+                if (obj is SavedParameterConfiguration o)
                 {
-                    return typed.param.name.Equals(this.param.name) && typed.param.valueType == this.param.valueType;
+                    return o.GetHashCode() == GetHashCode();
                 }
                 
                 return base.Equals(obj);
@@ -81,23 +96,62 @@ namespace JeTeeS.MemoryOptimizer
             }
         }
         
+        [Serializable]
+        internal struct ComponentIssue
+        {
+            public string message;
+            public int level;
+            private int _hashCode;
+
+            public static implicit operator ComponentIssue((string, int) data)
+            {
+                return new ComponentIssue()
+                {
+                    message = data.Item1,
+                    level = data.Item2,
+                    _hashCode = $"{data.Item1}-level:{data.Item2}".GetHashCode()
+                };
+            }
+            
+            public override bool Equals(object obj)
+            {
+                if (obj is ComponentIssue o)
+                {
+                    return o._hashCode == _hashCode;
+                }
+                
+                return base.Equals(obj);
+            }
+
+            public override int GetHashCode()
+            {
+                return _hashCode;
+            }
+        }
+        
         [NonSerialized] private VRCAvatarDescriptor _vrcAvatarDescriptor;
 
         public bool changeDetection = false;
         public int syncSteps = 2;
         public float stepDelay = 0.2f;
         public int wdOption = 0;
-        [SerializeReference] internal DefaultAsset savePathOverride = null;
-        
-        [NonSerialized] internal int longestParameterName = 0;
 
+        [SerializeField] internal List<ComponentIssue> componentIssues = new(0);
         [SerializeField] internal List<SavedParameterConfiguration> savedParameterConfigurations = new(0);
         
         internal void Load()
         {
+            componentIssues = new(0);
+            
             // get descriptor
-            _vrcAvatarDescriptor = gameObject.GetComponent<VRCAvatarDescriptor>();
+            _vrcAvatarDescriptor ??= gameObject.GetComponent<VRCAvatarDescriptor>();
+            
             var descriptorParameters = (_vrcAvatarDescriptor?.expressionParameters?.parameters ?? Array.Empty<VRCExpressionParameters.Parameter>()).Where(p => p.networkSynced).ToList();
+            
+            if (MemoryOptimizerHelper.IsSystemInstalled(_vrcAvatarDescriptor))
+            {
+                componentIssues.Add(("MemoryOptimizer is already installed in the current FX-Layer.", 3 /* Error */));
+            }
             
             // collect all descriptor parameters that are synced
             foreach (var savedParameterConfiguration in descriptorParameters.Select(p => new SavedParameterConfiguration(p)
@@ -111,8 +165,7 @@ namespace JeTeeS.MemoryOptimizer
 #if MemoryOptimizer_VRCFury_IsInstalled
             // since all VRCFury components are IEditorOnly, we can find them like this
             // there is no better way as VRCFury has decided to mark their classes as internal only
-            List<IEditorOnly> vrcfComponents = (gameObject.GetComponents<IEditorOnly>())
-                .Concat(gameObject.GetComponentsInChildren<IEditorOnly>(true))
+            List<IEditorOnly> vrcfComponents = gameObject.GetComponentsInChildren<IEditorOnly>(true)
                 .Where(x => x.GetType().ToString().Contains("VRCFury"))
                 .ToList();
             
@@ -149,9 +202,15 @@ namespace JeTeeS.MemoryOptimizer
                     // Notes:
                     // VRCFury generates parameters with the following format: VF\d+_{name}
                     // since we have no access to the number unless we build the avatar, we just display VF##_{name} and map it correctly later
+
+                    Debug.Log(contentType);
                     
+                    if (contentType.Contains("UnlimitedParameters"))
+                    {
+                        componentIssues.Add(("VRCFury 'Parameter Compressor' (formerly 'Unlimited Parameters') was found on Avatar.\nOur system IS NOT COMPATIBLE with this.", 3 /* Error */));
+                    }
                     // Toggle
-                    if (contentType.Contains("Toggle"))
+                    else if (contentType.Contains("Toggle"))
                     {
                         // Toggles are rather simple, they can be in any of these configurations:
                         // 1. being a normal toggle (auto-generated bool parameter)
@@ -250,6 +309,10 @@ namespace JeTeeS.MemoryOptimizer
                 }
             }
 #endif
+            if (savedParameterConfigurations.Count <= 0)
+            {
+                componentIssues.Add(("This avatar has no configured parameters.", 2 /* Warning */));
+            }
         }
 
         private void Awake()
@@ -270,15 +333,22 @@ namespace JeTeeS.MemoryOptimizer
                 // we replace it with the one costing more, as mapping from a float to a bool
                 // usually is handled much better than bool to a float
                 var saved = savedParameterConfigurations.FirstOrDefault(p => p == configuration);
-                if (saved is not null && saved.param.GetParameterCost() < configuration.param.GetParameterCost())
+                if (saved is not null && saved.param.GetVRCExpressionParameterCost() < configuration.param.GetVRCExpressionParameterCost())
                 {
                     saved.param = configuration.param;
                 }
             }
             else
             {
-                longestParameterName = Math.Max(longestParameterName, configuration.param.name.Count());
                 savedParameterConfigurations.Add(configuration);
+            }
+        }
+
+        private void AddIssue(ComponentIssue issue)
+        {
+            if (!componentIssues.Contains(issue))
+            {
+                componentIssues.Add(issue);
             }
         }
     }
