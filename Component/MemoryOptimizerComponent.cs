@@ -79,16 +79,6 @@ namespace JeTeeS.MemoryOptimizer
                     networkSynced = true
                 }, this.selected, this.willBeOptimized);
             }
-            
-            public static bool operator ==(SavedParameterConfiguration a, object b)
-            {
-                return a?.Equals(b) ?? false;
-            }
-
-            public static bool operator !=(SavedParameterConfiguration a, object b)
-            {
-                return !(a == b);
-            }
         }
         
         [Serializable]
@@ -198,8 +188,6 @@ namespace JeTeeS.MemoryOptimizer
                     // Notes:
                     // VRCFury generates parameters with the following format: VF\d+_{name}
                     // since we have no access to the number unless we build the avatar, we just display VF##_{name} and map it correctly later
-
-                    Debug.Log(contentType);
                     
                     if (contentType.Contains("UnlimitedParameters"))
                     {
@@ -328,9 +316,11 @@ namespace JeTeeS.MemoryOptimizer
                 // in the odd case a parameter is defined multiple times
                 // we replace it with the one costing more, as mapping from a float to a bool
                 // usually is handled much better than bool to a float
-                var saved = savedParameterConfigurations.FirstOrDefault(p => p == configuration);
+                var saved = savedParameterConfigurations.FirstOrDefault(p => p.Equals(configuration));
                 if (saved is not null && saved.param.GetVRCExpressionParameterCost() < configuration.param.GetVRCExpressionParameterCost())
                 {
+                    Debug.LogWarning($"<color=yellow>[MemoryOptimizer]</color> Parameter '{saved.param.name}' from '{saved.info}' was already loaded as {paramTypes[(int)saved.param.valueType]} but has been replaced by {paramTypes[(int)configuration.param.valueType]} from '{configuration.info}'");
+                    
                     saved.param = configuration.param;
                     saved.CalculateHashCode();
                 }

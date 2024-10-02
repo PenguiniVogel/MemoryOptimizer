@@ -38,6 +38,7 @@ namespace JeTeeS.MemoryOptimizer.Pipeline
             // skip if we have no fx layer, or system is installed, or we don't have parameters
             if (fxLayer is null || MemoryOptimizerHelper.IsSystemInstalled(fxLayer) || parameters.Length <= 0)
             {
+                Debug.LogWarning("<color=yellow>[MemoryOptimizer]</color> System was not installed as it either: was already installed, there was no fx layer or no parameters.");
                 return true;
             }
 
@@ -166,7 +167,7 @@ namespace JeTeeS.MemoryOptimizer.Pipeline
                 return vrcAvatarDescriptor.expressionParameters?.CalcTotalCost() < VRCExpressionParameters.MAX_PARAMETER_COST;
             }
 
-            Debug.Log("<color=yellow>[MemoryOptimizer]</color> System was not installed as there were no parameters to optimize.");
+            Debug.LogWarning("<color=yellow>[MemoryOptimizer]</color> System was not installed as there were no parameters to optimize.");
             return true;
         }
     }
