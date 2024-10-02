@@ -26,9 +26,9 @@ namespace JeTeeS.MemoryOptimizer
         internal class SavedParameterConfiguration : MemoryOptimizerListData
         {
             public bool isVRCFuryParameter = false;
-            public string info = string.Empty;
+            public string info = string.Empty; 
             
-            [NonSerialized] private int _hashCode = -1;
+            [SerializeField] private int hashCode = -1;
             
             public SavedParameterConfiguration(VRCExpressionParameters.Parameter parameter) : base(parameter, false, false)
             {
@@ -45,28 +45,23 @@ namespace JeTeeS.MemoryOptimizer
                 CalculateHashCode();
             }
 
-            private void CalculateHashCode()
+            internal void CalculateHashCode()
             {
-                _hashCode = $"name:{this.param.name}-level:{paramTypes[(int)this.param.valueType]}".GetHashCode();
+                hashCode = $"name:{this.param.name}-level:{paramTypes[(int)this.param.valueType]}".GetHashCode();
             }
             
             public override int GetHashCode()
             {
-                if (_hashCode == -1)
+                if (hashCode == -1)
                 {
                     CalculateHashCode();
                 }
                 
-                return _hashCode;
+                return hashCode;
             }
 
             public override bool Equals(object obj)
             {
-                if (obj is null)
-                {
-                    return false;
-                }
-
                 if (obj is SavedParameterConfiguration o)
                 {
                     return o.GetHashCode() == GetHashCode();
@@ -101,7 +96,8 @@ namespace JeTeeS.MemoryOptimizer
         {
             public string message;
             public int level;
-            private int _hashCode;
+            
+            [SerializeField] private int hashCode;
 
             public static implicit operator ComponentIssue((string, int) data)
             {
@@ -109,7 +105,7 @@ namespace JeTeeS.MemoryOptimizer
                 {
                     message = data.Item1,
                     level = data.Item2,
-                    _hashCode = $"{data.Item1}-level:{data.Item2}".GetHashCode()
+                    hashCode = $"{data.Item1}-level:{data.Item2}".GetHashCode()
                 };
             }
             
@@ -117,7 +113,7 @@ namespace JeTeeS.MemoryOptimizer
             {
                 if (obj is ComponentIssue o)
                 {
-                    return o._hashCode == _hashCode;
+                    return o.hashCode == hashCode;
                 }
                 
                 return base.Equals(obj);
@@ -125,7 +121,7 @@ namespace JeTeeS.MemoryOptimizer
 
             public override int GetHashCode()
             {
-                return _hashCode;
+                return hashCode;
             }
         }
         
@@ -336,6 +332,7 @@ namespace JeTeeS.MemoryOptimizer
                 if (saved is not null && saved.param.GetVRCExpressionParameterCost() < configuration.param.GetVRCExpressionParameterCost())
                 {
                     saved.param = configuration.param;
+                    saved.CalculateHashCode();
                 }
             }
             else
