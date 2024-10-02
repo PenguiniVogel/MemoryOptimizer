@@ -1,7 +1,5 @@
-﻿using System;
-using System.Linq;
+﻿using System.Linq;
 using JeTeeS.MemoryOptimizer.Patcher;
-using JeTeeS.TES.HelperFunctions;
 using UnityEditor;
 using UnityEngine;
 using static JeTeeS.MemoryOptimizer.Shared.MemoryOptimizerConstants;
@@ -17,7 +15,7 @@ namespace JeTeeS.MemoryOptimizer
         {
             _component ??= (MemoryOptimizerComponent)target;
             
-            _component.Load();
+            _component.LoadParameters();
         }
 
         public override void OnInspectorGUI()
@@ -73,11 +71,9 @@ namespace JeTeeS.MemoryOptimizer
                 
                 if (GUILayout.Button("Configure"))
                 {
-                    _component.Load();
-                
-                    MemoryOptimizerWindow._component = _component;
-                    EditorWindow window = EditorWindow.GetWindow(typeof(MemoryOptimizerWindow), false, "Memory Optimizer (Configuration)", true);
-                    window.minSize = new Vector2(600, 900);
+                    _component.LoadParameters();
+                    
+                    MemoryOptimizerWindow.ShowWindowInternal(_component);
                 }
 
                 GUI.enabled = true;

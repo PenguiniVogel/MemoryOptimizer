@@ -168,6 +168,7 @@ namespace JeTeeS.MemoryOptimizer.Pipeline
             }
 
             Debug.LogWarning("<color=yellow>[MemoryOptimizer]</color> System was not installed as there were no parameters to optimize.");
+            
             return true;
         }
     }

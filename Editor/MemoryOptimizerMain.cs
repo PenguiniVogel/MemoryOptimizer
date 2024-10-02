@@ -167,11 +167,12 @@ namespace JeTeeS.MemoryOptimizer
             List<AnimatorControllerParameter> boolsDifferentials = new();
             List<AnimatorControllerParameter> intsNFloatsDifferentials = new();
             
-            //Add smoothed ver of every param in the list
+            // Add smoothed ver of every param in the list
             foreach (var param in boolsToOptimize)
             {
                 var paramMatches = optimizerState.FXController.parameters.Where(x => x.name == param.param.name).ToList();
                 var paramMatch = paramMatches[0];
+                
                 if (paramMatch.type is AnimatorControllerParameterType.Int or AnimatorControllerParameterType.Bool)
                 {
                     var paramCopy = optimizerState.FXController.AddUniqueParam(prefix + paramMatch.name + "_Copy");
@@ -222,7 +223,7 @@ namespace JeTeeS.MemoryOptimizer
         private static void CreateTransitions(MemoryOptimizerState optimizerState, int syncSteps, float stepDelay, bool generateChangeDetection)
         {
             var optimizeBoolList = optimizerState.boolsToOptimize;
-            var optimizeIntBFloatList = optimizerState.intsNFloatsToOptimize;
+            var optimizeIntNFloatList = optimizerState.intsNFloatsToOptimize;
             var localSetStates = optimizerState.localSetStates;
             var remoteSetStates = optimizerState.remoteSetStates;
             var localResetStates = optimizerState.localResetStates;
@@ -312,14 +313,12 @@ namespace JeTeeS.MemoryOptimizer
 
                     for (var j = 0; j < optimizeBoolList.Count / syncSteps; j++)
                     {
-                        var differentialName = differentialsBool[i * (optimizeBoolList.Count() / syncSteps) + j].name;
-                        SetupLocalResetStateTransitions(differentialName);
+                        SetupLocalResetStateTransitions(differentialsBool[i * (optimizeBoolList.Count() / syncSteps) + j].name);
                     }
 
-                    for (var j = 0; j < optimizeIntBFloatList.Count / syncSteps; j++)
+                    for (var j = 0; j < optimizeIntNFloatList.Count / syncSteps; j++)
                     {
-                        var differentialName = differentialsIntNFloat[i * (optimizeIntBFloatList.Count() / syncSteps) + j].name;
-                        SetupLocalResetStateTransitions(differentialName);
+                        SetupLocalResetStateTransitions(differentialsIntNFloat[i * (optimizeIntNFloatList.Count() / syncSteps) + j].name);
                     }
                 }
 

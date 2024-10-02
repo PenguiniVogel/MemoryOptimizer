@@ -1,7 +1,4 @@
-﻿using System;
-using System.IO;
-using JeTeeS.MemoryOptimizer.Patcher;
-using UnityEditor;
+﻿using JeTeeS.MemoryOptimizer.Patcher;
 using UnityEngine;
 using VRC.SDKBase.Editor.BuildPipeline;
 

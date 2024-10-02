@@ -7,9 +7,7 @@ using System.Linq;
 using JeTeeS.MemoryOptimizer.Helper;
 using JeTeeS.MemoryOptimizer.Shared;
 using JeTeeS.TES.HelperFunctions;
-using UnityEditor;
 using UnityEngine;
-using UnityEngine.Serialization;
 using VRC.SDK3.Avatars.Components;
 using VRC.SDK3.Avatars.ScriptableObjects;
 using VRC.SDKBase;
@@ -47,7 +45,7 @@ namespace JeTeeS.MemoryOptimizer
 
             internal void CalculateHashCode()
             {
-                hashCode = $"name:{this.param.name}-level:{paramTypes[(int)this.param.valueType]}".GetHashCode();
+                hashCode = $"name:{this.param.name}-type:{paramTypes[(int)this.param.valueType]}".GetHashCode();
             }
             
             public override int GetHashCode()
@@ -74,10 +72,10 @@ namespace JeTeeS.MemoryOptimizer
             {
                 return new MemoryOptimizerListData(new VRCExpressionParameters.Parameter()
                 {
-                    name = this.param.name,
-                    valueType = this.param.valueType,
+                    name = param.name,
+                    valueType = param.valueType,
                     networkSynced = true
-                }, this.selected, this.willBeOptimized);
+                }, selected, willBeOptimized);
             }
         }
         
@@ -125,7 +123,7 @@ namespace JeTeeS.MemoryOptimizer
         [SerializeField] internal List<ComponentIssue> componentIssues = new(0);
         [SerializeField] internal List<SavedParameterConfiguration> savedParameterConfigurations = new(0);
         
-        internal void Load()
+        internal void LoadParameters()
         {
             componentIssues = new(0);
             
@@ -140,10 +138,7 @@ namespace JeTeeS.MemoryOptimizer
             }
             
             // collect all descriptor parameters that are synced
-            foreach (var savedParameterConfiguration in descriptorParameters.Select(p => new SavedParameterConfiguration(p)
-                     {
-                         info = "From Avatar Descriptor"
-                     }))
+            foreach (var savedParameterConfiguration in descriptorParameters.Select(p => new SavedParameterConfiguration(p) { info = "From Avatar Descriptor" }))
             {
                 AddOrReplaceParameterConfiguration(savedParameterConfiguration);
             }
@@ -161,9 +156,8 @@ namespace JeTeeS.MemoryOptimizer
             {
                 foreach (IEditorOnly vrcfComponent in vrcfComponents)
                 {
-                    // some systems use EditorOnly components to be optimized away
+                    // for the offset
                     var vrcfGameObject = ((Component)vrcfComponent).gameObject;
-                    var isEditorOnly = vrcfGameObject.tag.Equals("EditorOnly");
                     
                     // extract the content field from VRCFury, this is where the actual "component" data can be found
                     object contentValue = null;
@@ -231,7 +225,7 @@ namespace JeTeeS.MemoryOptimizer
                         SavedParameterConfiguration savedParameterConfiguration = new SavedParameterConfiguration(useGlobalParameter ? globalParameter : $"VF##_{toggleName}", isSlider ? VRCExpressionParameters.ValueType.Float : VRCExpressionParameters.ValueType.Bool)
                         {
                             isVRCFuryParameter = true,
-                            info = isEditorOnly ? "(EditorOnly) " : string.Empty + $"From Toggle: {toggleName} on {gameObject.name}"
+                            info = $"From Toggle: {toggleName} on {gameObject.name}"
                         };
                         
                         AddOrReplaceParameterConfiguration(savedParameterConfiguration);
@@ -255,16 +249,10 @@ namespace JeTeeS.MemoryOptimizer
                             var extractedParametersList = new List<VRCExpressionParameters>();
                             foreach (object slot in _parametersList)
                             {
-                                VRCExpressionParameters extracted = null;
                                 // the parameters are a field which is wrapped again
                                 if (slot.GetFieldValue("parameters")?.GetFieldValue("objRef") is VRCExpressionParameters cast)
                                 {
-                                    extracted = cast;
-                                }
-
-                                if (extracted is not null)
-                                {
-                                    extractedParametersList.Add(extracted);
+                                    extractedParametersList.Add(cast);
                                 }
                             }
 
@@ -279,10 +267,10 @@ namespace JeTeeS.MemoryOptimizer
                                         continue;
                                     }
                                     
-                                    SavedParameterConfiguration savedParameterConfiguration = new SavedParameterConfiguration((containsStar && !globalParameters.Contains($"!{parameter.name}")) || globalParameters.Contains(parameter.name) ? parameter.name : $"VF##_{parameter.name}", parameter.valueType)
+                                    var savedParameterConfiguration = new SavedParameterConfiguration((containsStar && !globalParameters.Contains($"!{parameter.name}")) || globalParameters.Contains(parameter.name) ? parameter.name : $"VF##_{parameter.name}", parameter.valueType)
                                     {
                                         isVRCFuryParameter = true,
-                                        info = isEditorOnly ? "(EditorOnly) " : string.Empty + $"From FullController on {vrcfGameObject.name}"
+                                        info = $"From FullController on {vrcfGameObject.name}"
                                     };
                                     
                                     AddOrReplaceParameterConfiguration(savedParameterConfiguration);
@@ -295,18 +283,15 @@ namespace JeTeeS.MemoryOptimizer
 #endif
             if (savedParameterConfigurations.Count <= 0)
             {
-                componentIssues.Add(("This avatar has no configured parameters.", 2 /* Warning */));
+                componentIssues.Add(("This avatar has no loaded parameters.", 2 /* Warning */));
             }
-        }
-
-        private void Awake()
-        {
-            Load();
         }
 
         private void Reset()
         {
             savedParameterConfigurations = new(0);
+            
+            LoadParameters();
         }
         
         private void AddOrReplaceParameterConfiguration(SavedParameterConfiguration configuration)

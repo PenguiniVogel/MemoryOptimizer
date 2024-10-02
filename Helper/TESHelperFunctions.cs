@@ -2,12 +2,14 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using UnityEngine;
 using UnityEditor;
 using UnityEditor.Animations;
 using VRC.SDK3.Avatars.Components;
 using VRC.SDK3.Avatars.ScriptableObjects;
+using Debug = UnityEngine.Debug;
 
 namespace JeTeeS.TES.HelperFunctions
 {
@@ -95,19 +97,19 @@ namespace JeTeeS.TES.HelperFunctions
         public static int UninstallErrorDialogWithDiscordLink(string title, string mainMessage, string discordLink)
         {
             var option = EditorUtility.DisplayDialogComplex(title, mainMessage, "Continue uninstall anyways (not recommended)", "Cancel uninstall", "Join the discord");
-                switch (option)
-                {
-                    case 0:
-                        return 0;
-                    case 1:
-                        return 1;
-                    case 2:
-                        Application.OpenURL(discordLink);
-                        return 2;
-                    default:
-                        Debug.LogError("Unrecognized option.");
-                        return -1;
-                }
+            switch (option)
+            {
+                case 0:
+                    return 0;
+                case 1:
+                    return 1;
+                case 2:
+                    Application.OpenURL(discordLink);
+                    return 2;
+                default:
+                    Debug.LogError("Unrecognized option.");
+                    return -1;
+            }
         }
         
         public static AnimatorController FindFXLayer(VRCAvatarDescriptor descriptor)
@@ -834,12 +836,46 @@ namespace JeTeeS.TES.HelperFunctions
                 result = (j % 2).ToString() + result;
             }
 
-            return Int32.Parse(result);
+            return int.Parse(result);
         }
 
         public static int GetVRCExpressionParameterCost(this VRCExpressionParameters.Parameter parameter)
         {
             return parameter.networkSynced ? 0 : parameter.valueType == VRCExpressionParameters.ValueType.Bool ? 1 : 8;
+        }
+
+        internal class TESPerformanceLogger : IDisposable
+        {
+            private readonly string _message;
+            private readonly UnityEngine.Object _context;
+            private readonly Stopwatch _w;
+            
+            public TESPerformanceLogger(string message = null, UnityEngine.Object context = null)
+            {
+                _message = string.IsNullOrEmpty(message) ? "TESPerformanceLogger finished in {0}" : message;
+                
+                _context = context;
+                
+                _w = new Stopwatch();
+                _w.Start();
+            }
+            
+            public void Dispose()
+            {
+                _w.Stop();
+                
+                var elapsed = _w.Elapsed;
+                var message = string.Format(_message, $"{elapsed.TotalSeconds:#0}s-{elapsed.TotalMilliseconds:##0}ms");
+                
+                if (_context is not null)
+                {
+                    Debug.LogWarning(message, _context);
+                }
+                else
+                {
+                    Debug.LogWarning(message);
+                }
+            }
         }
     }
 }

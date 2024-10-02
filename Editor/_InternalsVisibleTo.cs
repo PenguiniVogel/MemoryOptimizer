@@ -2,4 +2,3 @@
 
 [assembly: InternalsVisibleTo("dev.jetees.memoryoptimizer")]
 [assembly: InternalsVisibleTo("dev.jetees.memoryoptimizer.Component")]
-[assembly: InternalsVisibleTo("dev.jetees.memoryoptimizer.Pipeline")]
