@@ -74,8 +74,10 @@ namespace JeTeeS.MemoryOptimizer.Pipeline
             
             Debug.Log($"<color=yellow>[MemoryOptimizer]</color> OnPreprocessAvatar running on {avatarGameObject.name} with {parameters.Length} parameters - loaded configuration: {memoryOptimizer.savedParameterConfigurations.Where(p => p.selected && p.willBeOptimized).ToList().Count}");
 
-            var parametersBoolToOptimize = new List<MemoryOptimizerListData>(0);
-            var parametersIntNFloatToOptimize = new List<MemoryOptimizerListData>(0);
+            var parametersBoolToOptimize = new List<MemoryOptimizerListData>(memoryOptimizer.savedParameterConfigurations.Count);
+            var parametersIntNFloatToOptimize = new List<MemoryOptimizerListData>(memoryOptimizer.savedParameterConfigurations.Count);
+
+            int countBoolShould = 0, countBoolIs = 0, countIntNFloatShould = 0, countIntNFloatIs = 0;
             
             foreach (var savedParameterConfiguration in memoryOptimizer.savedParameterConfigurations)
             {
@@ -114,6 +116,18 @@ namespace JeTeeS.MemoryOptimizer.Pipeline
                     });
                 }
 
+                switch (savedParameterConfiguration.param.valueType)
+                {
+                    case VRCExpressionParameters.ValueType.Bool:
+                        countBoolShould++;
+                        break;
+                    case VRCExpressionParameters.ValueType.Int:
+                    case VRCExpressionParameters.ValueType.Float:
+                        countIntNFloatShould++;
+                        break;
+                }
+                
+                // didn't find parameter, skip
                 if (parameter is null)
                 {
                     continue;
@@ -149,14 +163,28 @@ namespace JeTeeS.MemoryOptimizer.Pipeline
                     switch (savedParameterConfiguration.param.valueType)
                     {
                         case VRCExpressionParameters.ValueType.Bool:
+                            countBoolIs++;
                             parametersBoolToOptimize.Add(pure);
                             break;
                         case VRCExpressionParameters.ValueType.Int:
                         case VRCExpressionParameters.ValueType.Float:
+                            countIntNFloatIs++;
                             parametersIntNFloatToOptimize.Add(pure);
                             break;
                     }
                 }
+            }
+
+            // ensure the bool parameters that are left still match what we can optimize
+            if (countBoolIs < countBoolShould)
+            {
+                parametersBoolToOptimize = parametersBoolToOptimize.Take(parametersBoolToOptimize.Count - (parametersBoolToOptimize.Count % memoryOptimizer.syncSteps)).ToList();
+            }
+            
+            // ensure the int and float parameters that are left still match what we can optimize
+            if (countIntNFloatIs < countIntNFloatShould)
+            {
+                parametersIntNFloatToOptimize = parametersIntNFloatToOptimize.Take(parametersIntNFloatToOptimize.Count - (parametersIntNFloatToOptimize.Count % memoryOptimizer.syncSteps)).ToList();
             }
 
             if (parametersBoolToOptimize.Any() || parametersIntNFloatToOptimize.Any())
