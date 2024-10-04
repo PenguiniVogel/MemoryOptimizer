@@ -13,7 +13,7 @@ namespace JeTeeS.MemoryOptimizer.Patcher
         {
             if (_refFinalValidationService is null || !_refIsPatched)
             {
-                if (AssetDatabase.LoadAssetAtPath<MonoScript>("Packages/com.vrcfury.vrcfury/Editor/VF/Service/FinalValidationService.cs") is MonoScript scriptToPatch)
+                if (AssetDatabase.LoadAssetAtPath<MonoScript>("Packages/com.vrcfury.vrcfury/Editor/VF/Service/FinalValidationService.cs") is { } scriptToPatch)
                 {
                     _refFinalValidationService = scriptToPatch;
                     _refIsPatched = scriptToPatch.text.Contains("patched by >>> dev.jetees.memoryoptimizer.MemoryOptimizerVRCFuryPatcher");
@@ -51,11 +51,11 @@ namespace JeTeeS.MemoryOptimizer.Patcher
             
             if (_refFinalValidationService is not null)
             {
-                if (AssetDatabase.LoadAssetAtPath<TextAsset>("Packages/dev.jetees.memoryoptimizer/Patcher/VRCFury-FinalValidationService.txt") is TextAsset patch)
+                if (AssetDatabase.LoadAssetAtPath<TextAsset>("Packages/dev.jetees.memoryoptimizer/Editor/Patcher/VRCFury-FinalValidationService.txt") is { } patch)
                 {
                     File.WriteAllText(AssetDatabase.GetAssetPath(_refFinalValidationService), patch.text);
                     EditorUtility.SetDirty(_refFinalValidationService);
-                    Debug.Log("MemoryOptimizerVRCFuryPatcher: Patched FinalValidationService.");
+                    Debug.Log("<color=yellow>[MemoryOptimizer]</color> MemoryOptimizerVRCFuryPatcher patched VF.Service.FinalValidationService!");
                 }
             }
 

@@ -132,10 +132,12 @@ namespace JeTeeS.MemoryOptimizer.Pipeline
                         case VRCExpressionParameters.ValueType.Int:
                             type = AnimatorControllerParameterType.Int;
                             break;
-                        case VRCExpressionParameters.ValueType.Float:
-                            break;
                         case VRCExpressionParameters.ValueType.Bool:
                             type = AnimatorControllerParameterType.Bool;
+                            break;
+                        default:
+                        case VRCExpressionParameters.ValueType.Float:
+                            // since we already assign float at the beginning, skip
                             break;
                     }
                     
@@ -151,7 +153,6 @@ namespace JeTeeS.MemoryOptimizer.Pipeline
                             break;
                         case VRCExpressionParameters.ValueType.Int:
                         case VRCExpressionParameters.ValueType.Float:
-                            
                             parametersIntNFloatToOptimize.Add(pure);
                             break;
                     }

@@ -1,5 +1,6 @@
 ﻿using System.Linq;
 using JeTeeS.MemoryOptimizer.Patcher;
+using JeTeeS.MemoryOptimizer.Pipeline;
 using UnityEditor;
 using UnityEngine;
 using static JeTeeS.MemoryOptimizer.Shared.MemoryOptimizerConstants;
