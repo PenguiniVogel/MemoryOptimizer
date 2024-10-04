@@ -32,43 +32,66 @@ namespace JeTeeS.MemoryOptimizer.Pipeline
                 return true;
             }
             
-            var fxLayer = FindFXLayer(vrcAvatarDescriptor);
-            var parameters = vrcAvatarDescriptor.expressionParameters?.parameters ?? Array.Empty<VRCExpressionParameters.Parameter>();
-
-            // skip if we have no fx layer, or system is installed, or we don't have parameters
-            if (fxLayer is null || MemoryOptimizerHelper.IsSystemInstalled(fxLayer) || parameters.Length <= 0)
+            // generate temporary fx layer if we don't find one, as parameters can be used in other layers as well
+            // but need to be synced on FX
+            var fxLayer = FindFXLayer(vrcAvatarDescriptor) ?? GenerateTemporaryFXLayer(vrcAvatarDescriptor);
+            var avatarParameters = vrcAvatarDescriptor.expressionParameters;
+            var parameters = Array.Empty<VRCExpressionParameters.Parameter>();
+            
+            // skip if:
+            // - no parameters (null or empty)
+            // - parameters are within budget, optimizing should only be done if we actually need it
+            // - the system is already installed
             {
-                Debug.LogWarning("<color=yellow>[MemoryOptimizer]</color> System was not installed as it either: was already installed, there was no fx layer or no parameters.");
-                return true;
-            }
-
-            var (copiedFxLayerSuccess, copiedFxLayer) = MakeCopyOf<AnimatorController>(fxLayer, $"Packages/dev.jetees.memoryoptimizer/Temp/Generated_{avatarGameObject.name.SanitizeFileName()}/", $"{prefix}_GeneratedFxLayer");
-            var (copiedExpressionParametersSuccess, copiedExpressionParameters) = MakeCopyOf<VRCExpressionParameters>(vrcAvatarDescriptor.expressionParameters, $"Packages/dev.jetees.memoryoptimizer/Temp/Generated_{avatarGameObject.name.SanitizeFileName()}/", $"{prefix}_GeneratedExpressionParameters");
-
-            // throw error when copy fails
-            if (!copiedFxLayerSuccess || !copiedExpressionParametersSuccess)
-            {
-                return false;
-            }
-
-            // setup copies
-            // we make the avatar reference copies to not break any original assets
-            fxLayer = copiedFxLayer;
-            parameters = copiedExpressionParameters.parameters;
-
-            vrcAvatarDescriptor.expressionParameters = copiedExpressionParameters;
-            for (int i = 0, l = vrcAvatarDescriptor.baseAnimationLayers.Length; i < l; i++)
-            {
-                // find the fx layer and replace it
-                if (vrcAvatarDescriptor.baseAnimationLayers[i] is { type: VRCAvatarDescriptor.AnimLayerType.FX, animatorController: not null })
+                var skipReasons = new List<string>();
+                
+                if (avatarParameters is null || avatarParameters?.parameters.Length <= 0 || (avatarParameters?.IsWithinBudget() ?? true))
                 {
-                    var layer = vrcAvatarDescriptor.baseAnimationLayers[i];
+                    skipReasons.Add(" - No parameters to optimize.");
+                }
 
-                    layer.animatorController = fxLayer;
+                if (MemoryOptimizerHelper.IsSystemInstalled(fxLayer))
+                {
+                    skipReasons.Add(" - System is already installed.");
+                }
+
+                if (skipReasons.Any())
+                {
+                    Debug.LogWarning($"<color=yellow>[MemoryOptimizer]</color> System was not installed:\n{string.Join("\n", skipReasons)}");
+                    return true;
+                }
+            }
+            
+            // make the avatar upload clone reference copies to not modify original assets
+            {
+                // setup copies
+                var pathBase = $"Packages/dev.jetees.memoryoptimizer/Temp/Generated_{avatarGameObject.name.SanitizeFileName()}/";
+                var (copiedFxLayerSuccess, copiedFxLayer) = MakeCopyOf<AnimatorController>(fxLayer, pathBase, $"{prefix}_GeneratedFxLayer");
+                var (copiedExpressionParametersSuccess, copiedExpressionParameters) = MakeCopyOf<VRCExpressionParameters>(vrcAvatarDescriptor.expressionParameters, pathBase, $"{prefix}_GeneratedExpressionParameters");
+                
+                // throw error when copy fails
+                if (!copiedFxLayerSuccess || !copiedExpressionParametersSuccess)
+                {
+                    return false;
+                }
+                
+                fxLayer = copiedFxLayer;
+                parameters = copiedExpressionParameters.parameters;
+
+                vrcAvatarDescriptor.expressionParameters = copiedExpressionParameters;
+                for (int i = 0, l = vrcAvatarDescriptor.baseAnimationLayers.Length; i < l; i++)
+                {
+                    // find the fx layer and replace it
+                    if (vrcAvatarDescriptor.baseAnimationLayers[i] is { type: VRCAvatarDescriptor.AnimLayerType.FX, animatorController: not null })
+                    {
+                        var layer = vrcAvatarDescriptor.baseAnimationLayers[i];
+
+                        layer.animatorController = fxLayer;
                     
-                    vrcAvatarDescriptor.baseAnimationLayers[i] = layer;
+                        vrcAvatarDescriptor.baseAnimationLayers[i] = layer;
 
-                    break;
+                        break;
+                    }
                 }
             }
             
@@ -132,10 +155,6 @@ namespace JeTeeS.MemoryOptimizer.Pipeline
                 {
                     continue;
                 }
-
-                // create pure copy to reference the proper parameter
-                var pure = savedParameterConfiguration.Pure();
-                pure.param = parameter;
                 
                 // add the parameter to the fx layer if it's missing
                 if (fxLayer.parameters.All(p => !p.name.Equals(parameter.name)))
@@ -160,16 +179,19 @@ namespace JeTeeS.MemoryOptimizer.Pipeline
                 
                 if (savedParameterConfiguration.selected && savedParameterConfiguration.willBeOptimized)
                 {
+                    // create copy to reference the proper parameter
+                    var baseCopy = savedParameterConfiguration.CopyBase(parameter);
+                    
                     switch (savedParameterConfiguration.param.valueType)
                     {
                         case VRCExpressionParameters.ValueType.Bool:
                             countBoolIs++;
-                            parametersBoolToOptimize.Add(pure);
+                            parametersBoolToOptimize.Add(baseCopy);
                             break;
                         case VRCExpressionParameters.ValueType.Int:
                         case VRCExpressionParameters.ValueType.Float:
                             countIntNFloatIs++;
-                            parametersIntNFloatToOptimize.Add(pure);
+                            parametersIntNFloatToOptimize.Add(baseCopy);
                             break;
                     }
                 }
@@ -178,13 +200,17 @@ namespace JeTeeS.MemoryOptimizer.Pipeline
             // ensure the bool parameters that are left still match what we can optimize
             if (countBoolIs < countBoolShould)
             {
-                parametersBoolToOptimize = parametersBoolToOptimize.Take(parametersBoolToOptimize.Count - (parametersBoolToOptimize.Count % memoryOptimizer.syncSteps)).ToList();
+                var newBoolCount = parametersBoolToOptimize.Count - (parametersBoolToOptimize.Count % memoryOptimizer.syncSteps);
+                Debug.LogWarning($"<color=yellow>[MemoryOptimizer]</color> Bool count did not match, expected: {countBoolShould} got: {countBoolIs} - now taking: {newBoolCount}");
+                parametersBoolToOptimize = parametersBoolToOptimize.Take(newBoolCount).ToList();
             }
             
             // ensure the int and float parameters that are left still match what we can optimize
             if (countIntNFloatIs < countIntNFloatShould)
             {
-                parametersIntNFloatToOptimize = parametersIntNFloatToOptimize.Take(parametersIntNFloatToOptimize.Count - (parametersIntNFloatToOptimize.Count % memoryOptimizer.syncSteps)).ToList();
+                var newIntNFloatCount = parametersIntNFloatToOptimize.Count - (parametersIntNFloatToOptimize.Count % memoryOptimizer.syncSteps);
+                Debug.LogWarning($"<color=yellow>[MemoryOptimizer]</color> IntNFloat count did not match, expected: {countIntNFloatShould} got: {countIntNFloatIs} - now taking: {newIntNFloatCount}");
+                parametersIntNFloatToOptimize = parametersIntNFloatToOptimize.Take(newIntNFloatCount).ToList();
             }
 
             if (parametersBoolToOptimize.Any() || parametersIntNFloatToOptimize.Any())

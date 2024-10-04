@@ -786,7 +786,7 @@ namespace JeTeeS.MemoryOptimizer
             {
                 foreach (var value in _component.savedParameterConfigurations)
                 {
-                    paramList.Add(value.Pure());
+                    paramList.Add(value.CopyBase());
                 }
             }
             else

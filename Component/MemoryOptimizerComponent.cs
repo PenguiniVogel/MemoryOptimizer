@@ -68,9 +68,9 @@ namespace JeTeeS.MemoryOptimizer
                 return base.Equals(obj);
             }
 
-            public MemoryOptimizerListData Pure()
+            public MemoryOptimizerListData CopyBase(VRCExpressionParameters.Parameter inherit = null)
             {
-                return new MemoryOptimizerListData(new VRCExpressionParameters.Parameter()
+                return new MemoryOptimizerListData(inherit ?? new VRCExpressionParameters.Parameter()
                 {
                     name = param.name,
                     valueType = param.valueType,

@@ -124,6 +124,22 @@ namespace JeTeeS.TES.HelperFunctions
             return null;
         }
 
+        public static AnimatorController GenerateTemporaryFXLayer(VRCAvatarDescriptor descriptor)
+        {
+            var pathBase = $"Packages/dev.jetees.memoryoptimizer/Temp/Generated_{descriptor.gameObject.name.SanitizeFileName()}/MemOpt_Temp_GeneratedFXLayer.controller";
+            
+            var temp = new AnimatorController()
+            {
+                name = "MemOpt_Temp_GeneratedFXLayer"
+            };
+
+            AssetDatabase.CreateAsset(temp, pathBase);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.ImportAsset(pathBase, ImportAssetOptions.ForceUpdate);
+            
+            return temp;
+        }
+        
         public static VRCExpressionParameters FindExpressionParams(VRCAvatarDescriptor descriptor)
         {
             return descriptor?.expressionParameters;
