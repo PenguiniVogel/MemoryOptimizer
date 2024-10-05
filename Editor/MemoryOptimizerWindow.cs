@@ -478,7 +478,7 @@ namespace JeTeeS.MemoryOptimizer
                                 
                                 foreach (var param in paramList)
                                 {
-                                    var match = _component.savedParameterConfigurations.FirstOrDefault(p => p.param.name.Equals(param.param.name) && p.param.valueType == param.param.valueType);
+                                    var match = _component.parameterConfigs.FirstOrDefault(p => p.param.name.Equals(param.param.name) && p.param.valueType == param.param.valueType);
 
                                     // skip if we have no match
                                     if (match is null)
@@ -629,6 +629,20 @@ namespace JeTeeS.MemoryOptimizer
                                 stepDelay = 0.2f;
                             }
                         }
+
+                        if (_component is not null)
+                        {
+                            // delete orphans option
+                            using (new SqueezeScope((0, 0, Vertical, EditorStyles.helpBox)))
+                            {
+                                EditorGUILayout.HelpBox("Clearing Orphans will delete their configurations!", MessageType.Error, true);
+                                GUILayout.Label($"Current Orphan count: {_component.parameterConfigs.Count(x => x.isOrphanParameter)}");
+                                if (GUILayout.Button("Clear Orphans"))
+                                {
+                                    _component.ClearOrphans();
+                                }
+                            }
+                        }
                     }
 
                     break;
@@ -674,7 +688,7 @@ namespace JeTeeS.MemoryOptimizer
             avatarFXLayer.name = "Temporary Generated FX Layer";
             expressionParameters.name = "Temporary Generated Parameters";
                 
-            expressionParameters.parameters = _component.savedParameterConfigurations.Select(s =>
+            expressionParameters.parameters = _component.parameterConfigs.Where(p => !p.isOrphanParameter).Select(s =>
             {
                 avatarFXLayer.AddUniqueParam(s.param.name, s.param.valueType.ValueTypeToParamType());
                 return s.param;
@@ -784,7 +798,7 @@ namespace JeTeeS.MemoryOptimizer
 
             if (_component is not null)
             {
-                foreach (var value in _component.savedParameterConfigurations)
+                foreach (var value in _component.parameterConfigs)
                 {
                     paramList.Add(value.CopyBase());
                 }
@@ -793,7 +807,7 @@ namespace JeTeeS.MemoryOptimizer
             {
                 if (expressionParameters is not null && expressionParameters.parameters.Length > 0)
                 {
-                    foreach (VRCExpressionParameters.Parameter param in expressionParameters.parameters)
+                    foreach (var param in expressionParameters.parameters)
                     {
                         paramList.Add(new MemoryOptimizerListData(param, false, false));
                     }

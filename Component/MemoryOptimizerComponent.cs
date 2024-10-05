@@ -6,7 +6,6 @@ using System.Collections.Generic;
 using System.Linq;
 using JeTeeS.MemoryOptimizer.Helper;
 using JeTeeS.MemoryOptimizer.Shared;
-using JeTeeS.TES.HelperFunctions;
 using UnityEngine;
 using VRC.SDK3.Avatars.Components;
 using VRC.SDK3.Avatars.ScriptableObjects;
@@ -18,22 +17,26 @@ namespace JeTeeS.MemoryOptimizer
     [Serializable]
     [DisallowMultipleComponent]
     [RequireComponent(typeof(VRCAvatarDescriptor))]
-    internal class MemoryOptimizerComponent : MonoBehaviour, IEditorOnly
+    internal class MemoryOptimizerComponent : MonoBehaviour, IEditorOnly, ISerializationCallbackReceiver
     {
         [Serializable]
-        internal class SavedParameterConfiguration : MemoryOptimizerListData
+        internal class ParameterConfig : MemoryOptimizerListData
         {
-            public bool isVRCFuryParameter = false;
-            public string info = string.Empty; 
+            public string info = string.Empty;
+            
+            /**
+             * We set this flag for parameters that have lost their connection, but may re-gain it
+             */
+            public bool isOrphanParameter = false;
             
             [SerializeField] private int hashCode = -1;
             
-            public SavedParameterConfiguration(VRCExpressionParameters.Parameter parameter) : base(parameter, false, false)
+            public ParameterConfig(VRCExpressionParameters.Parameter parameter) : base(parameter, false, false)
             {
                 CalculateHashCode();
             }
             
-            public SavedParameterConfiguration(string parameterName, VRCExpressionParameters.ValueType parameterType) : base(new VRCExpressionParameters.Parameter()
+            public ParameterConfig(string parameterName, VRCExpressionParameters.ValueType parameterType) : base(new VRCExpressionParameters.Parameter()
             {
                 name = parameterName,
                 valueType = parameterType,
@@ -60,7 +63,7 @@ namespace JeTeeS.MemoryOptimizer
 
             public override bool Equals(object obj)
             {
-                if (obj is SavedParameterConfiguration o)
+                if (obj is ParameterConfig o)
                 {
                     return o.GetHashCode() == GetHashCode();
                 }
@@ -120,12 +123,30 @@ namespace JeTeeS.MemoryOptimizer
         public float stepDelay = 0.2f;
         public int wdOption = 0;
 
-        [SerializeField] internal List<ComponentIssue> componentIssues = new(0);
-        [SerializeField] internal List<SavedParameterConfiguration> savedParameterConfigurations = new(0);
+        [SerializeField] internal List<ComponentIssue> componentIssues = new(16);
+        [SerializeField] internal List<ParameterConfig> parameterConfigs = new(1024);
+
+        [NonSerialized] private Dictionary<int, ParameterConfig> lookupParameterConfigs = new(1024);
+        
+        public void OnBeforeSerialize()
+        { }
+
+        public void OnAfterDeserialize()
+        {
+            foreach (var parameterConfig in parameterConfigs)
+            {
+                lookupParameterConfigs.Add(parameterConfig.GetHashCode(), parameterConfig);
+            }
+        }
         
         internal void LoadParameters()
         {
             componentIssues = new(0);
+
+            foreach (var parameterConfig in parameterConfigs)
+            {
+                parameterConfig.isOrphanParameter = true;
+            }
             
             // get descriptor
             _vrcAvatarDescriptor ??= gameObject.GetComponent<VRCAvatarDescriptor>();
@@ -138,9 +159,9 @@ namespace JeTeeS.MemoryOptimizer
             }
             
             // collect all descriptor parameters that are synced
-            foreach (var savedParameterConfiguration in descriptorParameters.Select(p => new SavedParameterConfiguration(p) { info = "From Avatar Descriptor" }))
+            foreach (var savedParameterConfiguration in descriptorParameters.Select(p => new ParameterConfig(p) { info = "From Avatar Descriptor" }))
             {
-                AddOrReplaceParameterConfiguration(savedParameterConfiguration);
+                AddParameterConfig(savedParameterConfiguration);
             }
             
 #if MemoryOptimizer_VRCFury_IsInstalled
@@ -156,9 +177,44 @@ namespace JeTeeS.MemoryOptimizer
             {
                 foreach (IEditorOnly vrcfComponent in vrcfComponents)
                 {
-                    // for the offset
-                    var vrcfGameObject = ((Component)vrcfComponent).gameObject;
+                    // get type name
+                    var vrcfType = vrcfComponent.GetType().ToString();
                     
+                    // get containing object
+                    var vrcfGameObject = ((Component)vrcfComponent).gameObject;
+
+                    // VRCFuryHapticSocket components are handled differently
+                    if (vrcfType.Contains("VRCFuryHapticSocket"))
+                    {
+                        var hapticName = string.Empty;
+                        if (vrcfComponent.GetFieldValue("name") is string _name && !string.IsNullOrEmpty(_name))
+                        {
+                            hapticName = _name;
+                        }
+
+                        // VRCFuryHapticSocket generate a parameter called _stealth
+                        AddParameterConfig(new ParameterConfig("VF##_stealth", VRCExpressionParameters.ValueType.Bool));
+                        
+                        var hapticAddMenuItem = vrcfComponent.GetFieldValue("addMenuItem") is true;
+
+                        // ignore _Unknown or no menu item
+                        if (string.IsNullOrEmpty(hapticName) || !hapticAddMenuItem)
+                        {
+                            continue;
+                        }
+
+                        AddParameterConfig(new ParameterConfig($"VF##_{hapticName}", VRCExpressionParameters.ValueType.Bool));
+                        
+                        // we can go to the next component
+                        continue;
+                    }
+                    // VRCFuryHapticPlug don't generate a parameter because ???
+                    else if (vrcfType.Contains("VRCFuryHapticPlug"))
+                    {
+                        continue;    
+                    }
+                    
+                    // the normal components are handled via VRCFury.content
                     // extract the content field from VRCFury, this is where the actual "component" data can be found
                     object contentValue = null;
                     try
@@ -222,13 +278,12 @@ namespace JeTeeS.MemoryOptimizer
                             continue;
                         }
 
-                        SavedParameterConfiguration savedParameterConfiguration = new SavedParameterConfiguration(useGlobalParameter ? globalParameter : $"VF##_{toggleName}", isSlider ? VRCExpressionParameters.ValueType.Float : VRCExpressionParameters.ValueType.Bool)
+                        ParameterConfig parameterConfig = new ParameterConfig(useGlobalParameter ? globalParameter : $"VF##_{toggleName}", isSlider ? VRCExpressionParameters.ValueType.Float : VRCExpressionParameters.ValueType.Bool)
                         {
-                            isVRCFuryParameter = true,
                             info = $"From Toggle: {toggleName} on {gameObject.name}"
                         };
                         
-                        AddOrReplaceParameterConfiguration(savedParameterConfiguration);
+                        AddParameterConfig(parameterConfig);
                     }
                     // Full Controller
                     else if (contentType.Contains("FullController"))
@@ -241,79 +296,119 @@ namespace JeTeeS.MemoryOptimizer
                         }
 
                         var containsStar = globalParameters.Contains("*");
+                        var isGoGo = false;
                         
                         // get the parameter list
                         if (contentValue.GetFieldValue("prms") is IEnumerable _parametersList)
                         {
+                            var generatedConfigs = new Dictionary<int, ParameterConfig>(1024);
                             // remap to actual expression parameters
-                            var extractedParametersList = new List<VRCExpressionParameters>();
-                            foreach (object slot in _parametersList)
+                            foreach (var slot in _parametersList)
                             {
                                 // the parameters are a field which is wrapped again
                                 if (slot.GetFieldValue("parameters")?.GetFieldValue("objRef") is VRCExpressionParameters cast)
                                 {
-                                    extractedParametersList.Add(cast);
+                                    // add parameters
+                                    foreach (var parameter in cast.parameters)
+                                    {
+                                        // so we can fix them later
+                                        if (parameter.name.Equals("Go/Locomotion"))
+                                        {
+                                            isGoGo = true;
+                                        }
+                                        
+                                        // ignore un-synced
+                                        if (!parameter.networkSynced)
+                                        {
+                                            continue;
+                                        }
+                                    
+                                        var parameterConfig = new ParameterConfig((containsStar && !globalParameters.Contains($"!{parameter.name}")) || globalParameters.Contains(parameter.name) ? parameter.name : $"VF##_{parameter.name}", parameter.valueType)
+                                        {
+                                            info = $"From FullController on {vrcfGameObject.name}"
+                                        };
+
+                                        // avoid duplicates
+                                        generatedConfigs.TryAdd(parameterConfig.GetHashCode(), parameterConfig);
+                                    }
                                 }
                             }
 
-                            // flatten parameters down
-                            foreach (VRCExpressionParameters vrcExpressionParameters in extractedParametersList)
+                            // add to component
+                            foreach (var parameterConfig in generatedConfigs.Select(generatedConfig => generatedConfig.Value))
                             {
-                                foreach (VRCExpressionParameters.Parameter parameter in vrcExpressionParameters.parameters)
+                                // since GoGo has an issue with their global parameters using 'a *' in most versions, we remap them ourselves correctly
+                                if (isGoGo)
                                 {
-                                    // ignore un-synced
-                                    if (!parameter.networkSynced)
+                                    var fixedName = parameterConfig.param.name["VF##_".Length..];
+                                    if (!fixedName.StartsWith("Go/"))
                                     {
-                                        continue;
+                                        fixedName = "Go/" + fixedName;
                                     }
                                     
-                                    var savedParameterConfiguration = new SavedParameterConfiguration((containsStar && !globalParameters.Contains($"!{parameter.name}")) || globalParameters.Contains(parameter.name) ? parameter.name : $"VF##_{parameter.name}", parameter.valueType)
+                                    parameterConfig.param = new VRCExpressionParameters.Parameter()
                                     {
-                                        isVRCFuryParameter = true,
-                                        info = $"From FullController on {vrcfGameObject.name}"
+                                        name = fixedName,
+                                        valueType = parameterConfig.param.valueType,
+                                        networkSynced = parameterConfig.param.networkSynced
                                     };
                                     
-                                    AddOrReplaceParameterConfiguration(savedParameterConfiguration);
+                                    parameterConfig.CalculateHashCode();
                                 }
+                                
+                                AddParameterConfig(parameterConfig);
                             }
                         }
                     }
                 }
             }
 #endif
-            if (savedParameterConfigurations.Count <= 0)
+            if (parameterConfigs.Count <= 0)
             {
                 componentIssues.Add(("This avatar has no loaded parameters.", 2 /* Warning */));
             }
         }
 
+        internal void ClearOrphans()
+        {
+            foreach (var parameterConfig in parameterConfigs.ToArray())
+            {
+                if (parameterConfig.isOrphanParameter)
+                {
+                    parameterConfigs.Remove(parameterConfig);
+                    lookupParameterConfigs.Remove(parameterConfig.GetHashCode());
+                }
+            }
+        }
+        
         private void Reset()
         {
-            savedParameterConfigurations = new(0);
+            parameterConfigs = new(1024);
+            lookupParameterConfigs = new Dictionary<int, ParameterConfig>(1024);
             
             LoadParameters();
         }
         
-        private void AddOrReplaceParameterConfiguration(SavedParameterConfiguration configuration)
+        private bool AddParameterConfig(ParameterConfig config)
         {
-            if (savedParameterConfigurations.Contains(configuration))
+            if (AnimatorExclusions.Contains(config.param.name))
             {
-                // in the odd case a parameter is defined multiple times
-                // we replace it with the one costing more, as mapping from a float to a bool
-                // usually is handled much better than bool to a float
-                var saved = savedParameterConfigurations.FirstOrDefault(p => p.Equals(configuration));
-                if (saved is not null && saved.param.GetVRCExpressionParameterCost() < configuration.param.GetVRCExpressionParameterCost())
-                {
-                    Debug.LogWarning($"<color=yellow>[MemoryOptimizer]</color> Parameter '{saved.param.name}' from '{saved.info}' was already loaded as {paramTypes[(int)saved.param.valueType]} but has been replaced by {paramTypes[(int)configuration.param.valueType]} from '{configuration.info}'");
-                    
-                    saved.param = configuration.param;
-                    saved.CalculateHashCode();
-                }
+                return false;
+            }
+
+            if (lookupParameterConfigs.TryGetValue(config.GetHashCode(), out var stored))
+            {
+                stored.isOrphanParameter = false;
             }
             else
             {
-                savedParameterConfigurations.Add(configuration);
+                if (lookupParameterConfigs.TryAdd(config.GetHashCode(), config))
+                {
+                    parameterConfigs.Add(config);
+                }
             }
+            
+            return true;
         }
 
         private void AddIssue(ComponentIssue issue)

@@ -29,7 +29,7 @@ namespace JeTeeS.MemoryOptimizer.Pipeline
             // if we don't have a component don't process
             if (memoryOptimizer is null)
             {
-                return true;
+                return PreprocessFinalValidation(vrcAvatarDescriptor);
             }
             
             // generate temporary fx layer if we don't find one, as parameters can be used in other layers as well
@@ -42,6 +42,7 @@ namespace JeTeeS.MemoryOptimizer.Pipeline
             // - no parameters (null or empty)
             // - parameters are within budget, optimizing should only be done if we actually need it
             // - the system is already installed
+            // - no configurations
             {
                 var skipReasons = new List<string>();
                 
@@ -55,10 +56,16 @@ namespace JeTeeS.MemoryOptimizer.Pipeline
                     skipReasons.Add(" - System is already installed.");
                 }
 
+                // if none are selected, skip
+                if (memoryOptimizer.parameterConfigs.All(x => !x.selected))
+                {
+                    skipReasons.Add(" - No Parameters were selected to be optimized.");
+                }
+
                 if (skipReasons.Any())
                 {
                     Debug.LogWarning($"<color=yellow>[MemoryOptimizer]</color> System was not installed:\n{string.Join("\n", skipReasons)}");
-                    return true;
+                    return PreprocessFinalValidation(vrcAvatarDescriptor);
                 }
             }
             
@@ -95,25 +102,31 @@ namespace JeTeeS.MemoryOptimizer.Pipeline
                 }
             }
             
-            Debug.Log($"<color=yellow>[MemoryOptimizer]</color> OnPreprocessAvatar running on {avatarGameObject.name} with {parameters.Length} parameters - loaded configuration: {memoryOptimizer.savedParameterConfigurations.Where(p => p.selected && p.willBeOptimized).ToList().Count}");
+            Debug.Log($"<color=yellow>[MemoryOptimizer]</color> OnPreprocessAvatar running on {avatarGameObject.name} with {parameters.Length} parameters - loaded configuration: {memoryOptimizer.parameterConfigs.Where(p => p.selected && p.willBeOptimized).ToList().Count}");
 
-            var parametersBoolToOptimize = new List<MemoryOptimizerListData>(memoryOptimizer.savedParameterConfigurations.Count);
-            var parametersIntNFloatToOptimize = new List<MemoryOptimizerListData>(memoryOptimizer.savedParameterConfigurations.Count);
+            var parametersBoolToOptimize = new List<MemoryOptimizerListData>(memoryOptimizer.parameterConfigs.Count);
+            var parametersIntNFloatToOptimize = new List<MemoryOptimizerListData>(memoryOptimizer.parameterConfigs.Count);
 
             int countBoolShould = 0, countBoolIs = 0, countIntNFloatShould = 0, countIntNFloatIs = 0;
             
-            foreach (var savedParameterConfiguration in memoryOptimizer.savedParameterConfigurations)
+            foreach (var parameterConfig in memoryOptimizer.parameterConfigs)
             {
+                // ignore orphans
+                if (parameterConfig.isOrphanParameter)
+                {
+                    continue;
+                }
+                
                 // find actual parameter
                 VRCExpressionParameters.Parameter parameter = null;
-                if (savedParameterConfiguration.param.name.StartsWith("VF##_"))
+                if (parameterConfig.param.name.StartsWith("VF##_"))
                 {
                     parameter = parameters.FirstOrDefault(p =>
                     {
                         if (p.networkSynced)
                         {
                             // match VRCFury parameters by regex replacing VF\d+_ and replacing VF##_ and then matching name and type
-                            if (p.name.StartsWith("VF") && new Regex("^VF\\d+_").Replace(p.name, string.Empty).Equals(savedParameterConfiguration.param.name.Replace("VF##_", string.Empty)) && p.valueType == savedParameterConfiguration.param.valueType)
+                            if (p.name.StartsWith("VF") && new Regex("^VF\\d+_").Replace(p.name, string.Empty).Equals(parameterConfig.param.name.Replace("VF##_", string.Empty)) && p.valueType == parameterConfig.param.valueType)
                             {
                                 return true;
                             }
@@ -129,7 +142,7 @@ namespace JeTeeS.MemoryOptimizer.Pipeline
                         if (p.networkSynced)
                         {
                             // match parameters by name and type
-                            if (p.name.Equals(savedParameterConfiguration.param.name) && p.valueType == savedParameterConfiguration.param.valueType)
+                            if (p.name.Equals(parameterConfig.param.name) && p.valueType == parameterConfig.param.valueType)
                             {
                                 return true;
                             }
@@ -139,7 +152,7 @@ namespace JeTeeS.MemoryOptimizer.Pipeline
                     });
                 }
 
-                switch (savedParameterConfiguration.param.valueType)
+                switch (parameterConfig.param.valueType)
                 {
                     case VRCExpressionParameters.ValueType.Bool:
                         countBoolShould++;
@@ -177,12 +190,12 @@ namespace JeTeeS.MemoryOptimizer.Pipeline
                     fxLayer.AddUniqueParam(parameter.name, type);
                 }
                 
-                if (savedParameterConfiguration.selected && savedParameterConfiguration.willBeOptimized)
+                if (parameterConfig.selected && parameterConfig.willBeOptimized)
                 {
                     // create copy to reference the proper parameter
-                    var baseCopy = savedParameterConfiguration.CopyBase(parameter);
+                    var baseCopy = parameterConfig.CopyBase(parameter);
                     
-                    switch (savedParameterConfiguration.param.valueType)
+                    switch (parameterConfig.param.valueType)
                     {
                         case VRCExpressionParameters.ValueType.Bool:
                             countBoolIs++;
@@ -215,20 +228,46 @@ namespace JeTeeS.MemoryOptimizer.Pipeline
 
             if (parametersBoolToOptimize.Any() || parametersIntNFloatToOptimize.Any())
             {
-                MemoryOptimizerMain.InstallMemOpt(vrcAvatarDescriptor, fxLayer, vrcAvatarDescriptor.expressionParameters, parametersBoolToOptimize, parametersIntNFloatToOptimize, memoryOptimizer.syncSteps, memoryOptimizer.stepDelay, memoryOptimizer.changeDetection, memoryOptimizer.wdOption, "Assets/TES/MemOpt");
-
-                if (vrcAvatarDescriptor.expressionParameters.parameters.Length > 8192)
-                {
-                    Debug.LogError($"<color=yellow>[MemoryOptimizer]</color> Exceeded maximum expression parameter count of 8192.");
-                    return false;
-                }
+                MemoryOptimizerMain.InstallMemOpt(vrcAvatarDescriptor, fxLayer, vrcAvatarDescriptor.expressionParameters, parametersBoolToOptimize, parametersIntNFloatToOptimize, memoryOptimizer.syncSteps, memoryOptimizer.stepDelay, memoryOptimizer.changeDetection, memoryOptimizer.wdOption, defaultSavePath);
                 
                 Debug.Log($"<color=yellow>[MemoryOptimizer]</color> OnPreprocessAvatar optimized:\n- Bools:\n{string.Join("\n", parametersBoolToOptimize.Select(p => $" > {p.param.name}"))}\n- IntNFloats:\n{string.Join("\n", parametersIntNFloatToOptimize.Select(p => $" > {p.param.name}"))}");
-                
-                return vrcAvatarDescriptor.expressionParameters.IsWithinBudget();
+
+                return PreprocessFinalValidation(vrcAvatarDescriptor);
             }
 
             Debug.LogWarning("<color=yellow>[MemoryOptimizer]</color> System was not installed as there were no parameters to optimize.");
+            
+            return PreprocessFinalValidation(vrcAvatarDescriptor);
+        }
+        
+        private static bool PreprocessFinalValidation(VRCAvatarDescriptor vrcAvatarDescriptor)
+        {
+            var shouldFail = false;
+            if (vrcAvatarDescriptor.expressionParameters.parameters.Length > 8192)
+            {
+                Debug.LogError($"<color=yellow>[MemoryOptimizer]</color> Exceeded maximum expression parameter count of 8192.");
+                    
+                shouldFail = true;
+            }
+
+            if (!vrcAvatarDescriptor.expressionParameters.IsWithinBudget())
+            {
+                Debug.LogError($"<color=yellow>[MemoryOptimizer]</color> Exceeded maximum synced expression parameter bit count: {vrcAvatarDescriptor.expressionParameters.CalcTotalCost()}/{VRCExpressionParameters.MAX_PARAMETER_COST}.");
+
+                shouldFail = true;
+            }
+
+            // only return the actual fail status if we actually are uploading
+            if (MemoryOptimizerIsActuallyUploading.Check())
+            {
+                // invert since false -> failed
+                return !shouldFail;
+            }
+
+            if (shouldFail)
+            {
+                Debug.LogWarning("<color=yellow>[MemoryOptimizer]</color> Pipeline passed build even though there were errors, as we are not uploading.");
+            }
             
             return true;
         }

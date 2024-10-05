@@ -1,9 +1,11 @@
-﻿namespace JeTeeS.MemoryOptimizer.Shared
+﻿using System.Collections.Generic;
+
+namespace JeTeeS.MemoryOptimizer.Shared
 {
     internal static class MemoryOptimizerConstants
     {
         internal const string menuPath = "Tools/TES/MemoryOptimizer";
-        internal const string defaultSavePath = "Assets/TES/MemOpt";
+        internal const string defaultSavePath = "Packages/dev.jetees.memoryoptimizer/Temp/Save";
         internal const string prefKey = "Mem_Opt_Pref_";
         internal const string unlockSyncStepsEPKey = prefKey + "UnlockSyncSteps";
         internal const string backUpModeEPKey = prefKey + "BackUpMode";
@@ -36,5 +38,54 @@
         internal static readonly string[] backupModes = { "On", "Off", "Ask" };
         internal static readonly string[] paramTypes = { "Int", "Float", "Bool" };
         internal static readonly string[] animatorParamTypes = { "", /* 1 */ "Float", "", /* 3 */ "Int", /* 4 */ "Bool", "", "", "", "", /* 9 */ "Trigger" };
+        
+        // exclude certain names, like VRC Animator Parameters, we don't want to optimize those
+        internal static readonly List<string> AnimatorExclusions = new()
+        {
+            "IsLocal",
+            "Viseme",
+            "Voice",
+            "GestureLeft",
+            "GestureRight",
+            "GestureLeftWeight",
+            "GestureRightWeight",
+            "AngularY",
+            "VelocityX",
+            "VelocityY",
+            "VelocityZ",
+            "VelocityMagnitude",
+            "Upright",
+            "Grounded",
+            "Seated",
+            "AFK",
+            "Expression1",
+            "Expression2",
+            "Expression3",
+            "Expression4",
+            "Expression5",
+            "Expression6",
+            "Expression7",
+            "Expression8",
+            "Expression9",
+            "Expression10",
+            "Expression11",
+            "Expression12",
+            "Expression13",
+            "Expression14",
+            "Expression15",
+            "Expression16",
+            "TrackingType",
+            "VRMode",
+            "MuteSelf",
+            "InStation",
+            "Earmuffs",
+            "IsOnFriendsList",
+            "AvatarVersion",
+            "ScaleModified",
+            "ScaleFactor",
+            "ScaleFactorInverse",
+            "EyeHeightAsMeters",
+            "EyeHeightAsPercent"
+        }; 
     }
 }

@@ -100,20 +100,29 @@ namespace JeTeeS.MemoryOptimizer
                 EditorPrefs.SetBool(EditorKeyInspectParameters, foldoutState);
                 if (foldoutState)
                 {
-                    foreach (var savedParameterConfiguration in _component.savedParameterConfigurations)
+                    foreach (var parameterConfig in _component.parameterConfigs)
                     {
-                        var (parameterName, parameterType, isSelected, willOptimize) = (savedParameterConfiguration.param.name, savedParameterConfiguration.param.valueType, savedParameterConfiguration.selected, savedParameterConfiguration.willBeOptimized);
-
                         using (new MemoryOptimizerWindow.SqueezeScope((0, 0, MemoryOptimizerWindow.SqueezeScope.SqueezeScopeType.Horizontal)))
                         {
                             GUILayout.Space(5);
 
-                            EditorGUILayout.HelpBox($"{parameterName} - {paramTypes[(int)parameterType]}\n -> {savedParameterConfiguration.info}", MessageType.None);
-                        
-                            GUI.backgroundColor = isSelected ? (willOptimize ? Color.green : Color.yellow) : Color.red;
+                            EditorGUILayout.HelpBox($"{parameterConfig.param.name} - {paramTypes[(int)parameterConfig.param.valueType]}\n -> {parameterConfig.info}", MessageType.None);
+
                             GUI.enabled = false;
-                            GUILayout.Button($"{(isSelected ? (willOptimize ? "Will optimize." : "Can't be optimized." ) : "Won't be optimized.")}", GUILayout.Width(203));
+                            
+                            if (parameterConfig.isOrphanParameter)
+                            {
+                                GUI.backgroundColor = Color.gray;
+                                GUILayout.Button("Orphan", GUILayout.Width(203));
+                            }
+                            else
+                            {
+                                GUI.backgroundColor = parameterConfig.selected ? (parameterConfig.willBeOptimized ? Color.green : Color.yellow) : Color.red;
+                                GUILayout.Button($"{(parameterConfig.selected ? (parameterConfig.willBeOptimized ? "Will optimize." : "Can't be optimized." ) : "Won't be optimized.")}", GUILayout.Width(203));
+                            }
+                            
                             GUI.enabled = true;
+                            
                             GUI.backgroundColor = Color.white;
                         }
                     }
