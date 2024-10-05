@@ -23,25 +23,6 @@ namespace JeTeeS.MemoryOptimizer
         {
             bool hasErrors = _component.componentIssues.Any(x => x.level >= 3);
             
-#if MemoryOptimizer_VRCFury_IsInstalled
-            if (MemoryOptimizerVRCFuryPatcher.AreVRCFuryScriptsPatched())
-            {
-                EditorGUILayout.HelpBox("VRCFury is patched already!", MessageType.Info);
-            }
-            else
-            {
-                EditorGUILayout.HelpBox("VRCFury requires to be patched in order for this to correctly work when uploading.\nPatching will be done automatically during upload, however it is recommended todo this before.", MessageType.Warning);
-                using (new MemoryOptimizerWindow.SqueezeScope((0, 0, MemoryOptimizerWindow.SqueezeScope.SqueezeScopeType.Horizontal, EditorStyles.helpBox)))
-                {
-                    if (GUILayout.Button("Patch VRCFury") && EditorUtility.DisplayDialog("Patch VRCFury?", "This will patch some VRCFury files to disable upload check hooks for parameters as we preprocess after, this will cause a script rebuild.\nContinue?", "Yes, Patch!", "No."))
-                    {
-                        MemoryOptimizerVRCFuryPatcher.PatchVRCFuryScripts();
-                    }
-                }
-            }
-            
-            GUILayout.Space(5);
-#endif
             if (_component.componentIssues.Any())
             {
                 using (new MemoryOptimizerWindow.SqueezeScope((0, 0, MemoryOptimizerWindow.SqueezeScope.SqueezeScopeType.Horizontal, EditorStyles.helpBox)))

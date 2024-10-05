@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Reflection;
 using JeTeeS.MemoryOptimizer.Helper;
 using JeTeeS.MemoryOptimizer.Patcher;
@@ -63,61 +62,9 @@ namespace JeTeeS.MemoryOptimizer.Pipeline
             {
                 if (_wrapped is null) return true;
 
-                var status = false;
-                using (new PreprocessAvatarMemoryOptimizerScope(avatarGameObject))
-                {
-                    Debug.Log("<color=yellow>[MemoryOptimizer]</color> Hello from wrapped VRCFury Upload Pipeline!");
-                    
-                    // run VRCFury
-                    status = _wrapped.OnPreprocessAvatar(avatarGameObject);
-                }
+                MemoryOptimizerVRCFuryPatcher.FindAndPatch();
 
-                return status;
-            }
-
-            internal class PreprocessAvatarMemoryOptimizerScope : IDisposable
-            {
-                private readonly MemoryOptimizerComponent _component;
-                private Type _validationService;
-                private FieldInfo _validationServiceField;
-                
-                public PreprocessAvatarMemoryOptimizerScope(GameObject avatarObject)
-                {
-                    if (avatarObject?.GetComponent<MemoryOptimizerComponent>() is { } component)
-                    {
-                        _component = component;
-                    }
-                    
-                    if (_component is not null)
-                    {
-                        Init();
-                    }
-                }
-
-                private void Init()
-                {
-                    try
-                    {
-                        if (!MemoryOptimizerVRCFuryPatcher.AreVRCFuryScriptsPatched())
-                        {
-                            MemoryOptimizerVRCFuryPatcher.PatchVRCFuryScripts();
-                        }
-                        
-                        _validationService = ReflectionHelper.FindTypeInAssemblies("VF.Service.FinalValidationService");
-                        _validationServiceField = _validationService?.GetField("_checkDisabledByMemoryOptimizer", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
-                        
-                        _validationServiceField?.SetValue(null, true);
-                    }
-                    catch (Exception e)
-                    {
-                        Debug.Log($"<color=yellow>[MemoryOptimizer]</color> Setting the VF.Service.FinalValidationService flag resulted in an error: {e}");
-                    }
-                }
-                
-                public void Dispose()
-                {
-                    _validationServiceField?.SetValue(null, false);
-                }
+                return _wrapped.OnPreprocessAvatar(avatarGameObject);
             }
         }
     }

@@ -216,10 +216,16 @@ namespace JeTeeS.MemoryOptimizer.Pipeline
             if (parametersBoolToOptimize.Any() || parametersIntNFloatToOptimize.Any())
             {
                 MemoryOptimizerMain.InstallMemOpt(vrcAvatarDescriptor, fxLayer, vrcAvatarDescriptor.expressionParameters, parametersBoolToOptimize, parametersIntNFloatToOptimize, memoryOptimizer.syncSteps, memoryOptimizer.stepDelay, memoryOptimizer.changeDetection, memoryOptimizer.wdOption, "Assets/TES/MemOpt");
-            
+
+                if (vrcAvatarDescriptor.expressionParameters.parameters.Length > 8192)
+                {
+                    Debug.LogError($"<color=yellow>[MemoryOptimizer]</color> Exceeded maximum expression parameter count of 8192.");
+                    return false;
+                }
+                
                 Debug.Log($"<color=yellow>[MemoryOptimizer]</color> OnPreprocessAvatar optimized:\n- Bools:\n{string.Join("\n", parametersBoolToOptimize.Select(p => $" > {p.param.name}"))}\n- IntNFloats:\n{string.Join("\n", parametersIntNFloatToOptimize.Select(p => $" > {p.param.name}"))}");
                 
-                return vrcAvatarDescriptor.expressionParameters?.CalcTotalCost() < VRCExpressionParameters.MAX_PARAMETER_COST;
+                return vrcAvatarDescriptor.expressionParameters.IsWithinBudget();
             }
 
             Debug.LogWarning("<color=yellow>[MemoryOptimizer]</color> System was not installed as there were no parameters to optimize.");

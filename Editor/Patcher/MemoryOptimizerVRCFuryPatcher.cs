@@ -1,67 +1,68 @@
-﻿using System.IO;
-using UnityEditor;
+﻿using System.Reflection;
+using HarmonyLib;
+using JeTeeS.MemoryOptimizer.Helper;
 using UnityEngine;
 
 namespace JeTeeS.MemoryOptimizer.Patcher
 {
+    public static class FinalValidationServicePatch
+    {
+        public static bool PatchedCheckParams()
+        {
+            Debug.Log("<color=yellow>[MemoryOptimizer]</color> MemoryOptimizerVRCFuryPatcher hello from patched CheckParams!");
+            // skip original method
+            return false;
+        }
+    }
+    
     internal static class MemoryOptimizerVRCFuryPatcher
     {
+        private const string HarmonyId = "dev.jetees.memoryoptimizer.Patcher";
         private static bool _refIsPatched = false;
-        private static MonoScript _refFinalValidationService = null;
-
-        private static void Load()
+        
+        public static void FindAndPatch()
         {
-            if (_refFinalValidationService is null || !_refIsPatched)
+#if MemoryOptimizer_VRCFury_IsInstalled
+            // check that we are patched
+            if (!Harmony.HasAnyPatches(HarmonyId))
             {
-                if (AssetDatabase.LoadAssetAtPath<MonoScript>("Packages/com.vrcfury.vrcfury/Editor/VF/Service/FinalValidationService.cs") is { } scriptToPatch)
-                {
-                    _refFinalValidationService = scriptToPatch;
-                    _refIsPatched = scriptToPatch.text.Contains("patched by >>> dev.jetees.memoryoptimizer.MemoryOptimizerVRCFuryPatcher");
-                }
+                _refIsPatched = false;
             }
-        }
-        
-        public static bool AreVRCFuryScriptsPatched()
-        {
-#if MemoryOptimizer_VRCFury_IsInstalled
-#if !MemoryOptimizer_VRCFury_IsTested
-            Debug.LogWarning($"The pipeline is running on an untested version of VRCFury, probably fine though.");
-#endif
-            Load();
-
-            return _refIsPatched;
-#else
-            return true;
-#endif
-        }
-        
-        public static bool PatchVRCFuryScripts()
-        {
-#if MemoryOptimizer_VRCFury_IsInstalled
-#if !MemoryOptimizer_VRCFury_IsTested
-            Debug.LogWarning($"The pipeline is running on an untested version of VRCFury, probably fine though.");
-#endif
-            Load();
             
+            // if we are patched, just skip
             if (_refIsPatched)
             {
-                Debug.Log("MemoryOptimizerVRCFuryPatcher: Already patched, skipping.");
-                return true;
+                return;
             }
             
-            if (_refFinalValidationService is not null)
+            var harmony = new Harmony(HarmonyId);
+            
+            // make sure we unpatch everything from us first, just in case
+            harmony.UnpatchAll(HarmonyId);
+
+            if (ReflectionHelper.FindTypeInAssemblies("VF.Service.FinalValidationService") is not { } vfService)
             {
-                if (AssetDatabase.LoadAssetAtPath<TextAsset>("Packages/dev.jetees.memoryoptimizer/Editor/Patcher/VRCFury-FinalValidationService.txt") is { } patch)
-                {
-                    File.WriteAllText(AssetDatabase.GetAssetPath(_refFinalValidationService), patch.text);
-                    EditorUtility.SetDirty(_refFinalValidationService);
-                    Debug.Log("<color=yellow>[MemoryOptimizer]</color> MemoryOptimizerVRCFuryPatcher patched VF.Service.FinalValidationService!");
-                }
+                Debug.LogError("<color=yellow>[MemoryOptimizer]</color> MemoryOptimizerVRCFuryPatcher failed: did not find type VF.Service.FinalValidationService");
+                return;
             }
 
-            return AreVRCFuryScriptsPatched();
-#else
-            return true;
+            if (vfService.GetMethod("CheckParams", BindingFlags.NonPublic | BindingFlags.Instance) is not { } original)
+            {
+                Debug.LogError("<color=yellow>[MemoryOptimizer]</color> MemoryOptimizerVRCFuryPatcher failed: did not find method VF.Service.FinalValidationService.CheckParams");
+                return;
+            }
+
+            if (typeof(FinalValidationServicePatch).GetMethod("PatchedCheckParams", BindingFlags.Public | BindingFlags.Static) is not { } patch)
+            {
+                Debug.LogError("<color=yellow>[MemoryOptimizer]</color> MemoryOptimizerVRCFuryPatcher failed: did not find method JeTeeS.MemoryOptimizer.PatcherFinalValidationService.PatchedCheckParams");
+                return;
+            }
+            
+            harmony.Patch(original, new HarmonyMethod(patch));
+            
+            _refIsPatched = true;
+            
+            Debug.Log($"<color=yellow>[MemoryOptimizer]</color> MemoryOptimizerVRCFuryPatcher harmony patched {patch} to {original}");
 #endif
         }
     }

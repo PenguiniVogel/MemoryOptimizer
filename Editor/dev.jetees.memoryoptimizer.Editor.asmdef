@@ -24,11 +24,6 @@
             "name": "com.vrcfury.vrcfury",
             "expression": "0.0.0",
             "define": "MemoryOptimizer_VRCFury_IsInstalled"
-        },
-        {
-            "name": "com.vrcfury.vrcfury",
-            "expression": "[1.0.0,1.1075.0]",
-            "define": "MemoryOptimizer_VRCFury_IsTested"
         }
     ],
     "noEngineReferences": false
