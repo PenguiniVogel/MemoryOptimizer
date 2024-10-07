@@ -705,6 +705,8 @@ namespace JeTeeS.MemoryOptimizer
             syncSteps = _component.syncSteps;
             stepDelay = _component.stepDelay;
             changeDetectionEnabled = _component.changeDetection;
+            
+            OnChangeUpdate();
         }
         
         private void OnChangeUpdate()
@@ -798,7 +800,7 @@ namespace JeTeeS.MemoryOptimizer
 
             if (_component is not null)
             {
-                foreach (var value in _component.parameterConfigs)
+                foreach (var value in _component.parameterConfigs.Where(p => !p.isOrphanParameter))
                 {
                     paramList.Add(value.CopyBase());
                 }

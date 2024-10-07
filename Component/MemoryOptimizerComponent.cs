@@ -340,7 +340,12 @@ namespace JeTeeS.MemoryOptimizer
                                 // since GoGo has an issue with their global parameters using 'a *' in most versions, we remap them ourselves correctly
                                 if (isGoGo)
                                 {
-                                    var fixedName = parameterConfig.param.name["VF##_".Length..];
+                                    var fixedName = parameterConfig.param.name;
+                                    if (fixedName.StartsWith("VF##_"))
+                                    {
+                                        fixedName = fixedName["VF##_".Length..];
+                                    }
+                                    
                                     if (!fixedName.StartsWith("Go/"))
                                     {
                                         fixedName = "Go/" + fixedName;
